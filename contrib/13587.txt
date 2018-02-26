@@ -1,0 +1,247 @@
+|=-----------------------------------------------------------------------=|
+|=------------=[ T C P   S e s s i o n   H i j a c k i n g ]=------------=|
+|=-----------------------------------------------------------------------=|
+|=-----------------------=[      by Cheese      ]=-----------------------=|
+|=-----------------------=[ cheese[at]mymail.ch ]=-----------------------=|
+|=-----------------------=[ http://myCheese.org ]=-----------------------=|
+|=-----------------------------------------------------------------------=|
+
+
+---=[ Contents
+
+    [0x01] - Intro
+    
+    [0x02] - Theory
+        [0x02a] - TCP Sessions
+        [0x02b] - Man-in-the-Middle
+        [0x02c] - Session Hijack
+    
+    [0x03] - Practice
+        [0x03a] - Tools
+        [0x03b] - Scenario
+        [0x03c] - Attack
+
+    [0x04] - Outro
+
+
+
+---=[ 0x01 - Intro
+
+        Hi guys, in this paper I want to introduce you to the
+    theoretical and practical aspects of attacking TCP sessions.
+    We will aim to hijack a client-server connection, so we are
+    able to bypass password authentications which are normally done
+    at the start of a session.
+
+
+---=[ 0x02 - Theory
+
+-------=[ 0x02a - TCP sessions
+
+        At the establishment of a TCP session the client starts by
+    sending a SYN-packet (SYN=synchronize) with an sequence number.
+    This number is used to assure the transmission of packets in
+    a chronological order. It is increased by one with each packet.
+    The both sides of the connection wait for an packet with a specified
+    sequence number. The first seq-number for both directions is
+    random.
+        The server responds with an SYN/ACK packet (ACK-acknowledgment)
+    which contains the seq-number of the client+1 and also a own start
+    seq-number. The client confirm everything with an ACK packet including
+    the seq-number of the server+1, after that the session is established.
+
+                +---+       syn seq=x       +---+
+                | C | ------------------->  | S |
+                | L |                       | E |
+                | I |   syn ack=x+1 seq=y   | R |
+                | E | <-------------------- | V |
+                | N |                       | E |
+                | T |    ack=y+1 seq=x+1    | R |
+                +---+ --------------------> +---+
+                
+        To hijack a session it is required to send a packet with a right
+    seq-number, otherwise they are dropped. You have two options to get
+    the right seq-number.
+
+        Option A:
+            You try to guess the right number. It is made up of 32bit
+            so you _just_ have 4294967296 possibilities, good luck!
+
+        Option B:
+            You sniff the existing connection, this works at networks
+            which use Hub's without problems, but to do this at a switched
+            network you have one way:
+                Man-in-the-Middle!
+
+
+-------=[ 0x02b - Man-in-the-Middle
+
+        To get Man-in-the-Middle we use ARP Poison Routing.
+    ARP (address resolution protocol) binds MAC addresses to
+    IP addresses to make a data transfer on Ethernet possible.
+    You should read up about this protocol if you do not know much
+    about it.
+        In order to sniff the connection between two hosts the attacker
+    sends a manipulated ARP packet to one of the hosts which contains
+    the IP of the second host and the MAC of the attacker. So this host
+    sends every packet that is meant for the second host to the attacker.
+    The same is done with the other host, the attacker himself just
+    forwards the packets, so he acts as an invisible intermediary, as
+    Man-in-the-Middle.
+
+       
+    +------+                                             +------+
+    |HOST-A| -------------------SWITCH------------------ |HOST-B|
+    +------+   .................  |  .................   +------+
+                               :  |  :
+                               :  |  :
+                               :  |  :
+                               :  |  :
+                              +--------+
+        Hello [A], I am [B] > |ATTACKER| < Hello [B], I am [A]
+                              +--------+
+
+
+
+-------=[ 0x02c - Session Hijack
+
+        Vulnerable to hijacking is every unencrypted connection.
+    We start with the Man-in-the-Middle attack between the victim
+    and the server, if the server is in another subnet we attack
+    the gateway instead of the server. If everything is successful
+    we are able to observe every single packet with a sniffer.
+
+        To hijack the session we wait for a packet and use the infos
+    from it: source IP, destination IP, source port, destination port,
+    and the sequence number. With this data we create a own packet
+    and send it instantly to the server. The server accepts it and
+    increases the expected seq-number for the next one. As soon the
+    next packet from the real client arrives the server drops it as
+    outdated, so the client is desynchronized and loses the connection.
+     
+
+---=[ 0x03 - Practice
+    
+-------=[ 0x03a - Tools
+
+        There are many programs which do the complete thing by
+    itself (Hunt, Juggernaut, T-Sight), but I got some problems
+    with some of them.
+
+        For the Man-in-the-Middle attack I will use the well known
+    program "Ettercap". "Wireshark" does the sniffing for me
+    and the hijack is done with "Shijack", everything of course
+    on a Linux/GNU box.
+
+    Shijack: http://packetstormsecurity.org/sniffers/shijack.tgz
+     
+     
+-------=[ 0x03b - Scenario
+
+        We aim to hijack a telnet session between a client
+    and a server.
+    
+    Network:
+    
+       +--------+                                 +--------+
+       | SERVER | <.......T..E..L..N..E..T......> | CLIENT |
+       |10.0.0.1| --------------+  +--------------|10.0.0.2|
+       +--------+               |  |              +--------+
+                                |  |
+                              +------+
+                              |SWITCH|
+                              +------+
+                                 | 
+                                 |
+                             +--------+
+                             |ATTACKER|
+                             |10.0.0.3|
+                             +--------+
+
+                        
+ -------=[ 0x03c - Attack
+
+        As I said in the beginning we start with the MitM attack.
+    We will use ettercap to do it. Ettercap is started in the GTK mod
+    and we activate "Unified sniffing" in the sniff menu. Choose your
+    network interface and we continue with a click at "Scan for hosts"
+    at the hosts menu. After the scan is finished we display the hosts
+    with "Host list" in the same menu. 
+        10.0.0.1 -> Add to Target 1
+        10.0.0.2 -> Add to Target 2
+    Press "Start sniffing" at the start menu and "Arp poisoning" at the
+    Mitm menu.
+
+        Next we start a sniffer, "Wireshark" in my case. There we click
+    "List the available capture interfaces..." and get a list of our
+    interfaces, choose the right one and the sniffing starts.
+    Wait for any packet of the telnet connection, as soon as we get one
+    we click it and see the required informations.
+        For example:
+            Source IP        10.0.0.2
+            Destination IP   10.0.0.1
+            Source Port      53517
+            Destination Port 23
+
+        Now we are finally at the hijack, I will use "Shijack" for it.
+    If you got problems compiling you can use the binaries which are
+    included.
+
+#    
+#cheese:/home/cheese/hijack# ./shijack
+#Usage: ./shijack      [-r]
+#             The interface you are going to hijack on.
+#                The source ip of the connection.
+#              The source port of the connection.
+#                The destination IP of the connection.
+#              The destination port of the connection.
+#[-r]                    Reset the connection rather than hijacking it.
+#
+
+        OK thats simple. 
+        
+#        
+#cheese:/home/cheese/hijack# ./shijack eth0 10.0.0.2 53517 10.0.0.1 23
+#
+
+        Attack!!!!
+        
+#        
+#Waiting for SEQ/ACK  to arrive from the srcip to the dstip.
+#(To speed things up, try making some traffic between the two)
+#
+
+        The tool runs and waits for another packet to get an
+    working seq-number. As soon as it get something it will hijack
+    the connection automatically.
+    
+#
+#Got packet! SEQ = 0xad6e5b8e ACK = 0x5ebaf20d
+#Starting hijack session, Please use ^C to terminate.
+#Anything you enter from now on is sent to the hijacked TCP connection.
+#
+
+        Hijack successful! Now we are able to send everything we want
+    through the session to the server.
+    
+    
+---=[ 0x04 - Outro
+
+
+        Every unencrypted session is vulnerable to TCP-session-hijacks,
+    although it is mostly more simple to sniff the password directly.
+    But I think it is a really dangerous technique since one-time-password
+    like TAN or security token are also vulnerable.
+        I really hope you like my little paper.
+        
+       
+                    -Thx for reading-
+        
+
+    Written by : Cheese <cheese(at)mymail.ch>
+         Visit : myCheese.org
+               : Back2Hack.cc
+               : Core.am
+ Shout-Outs to : Asmo, BuntspechT, der_Dude, double_check, easysurfer,
+               : gunner, kingfinn, nonverbal, pHySSiX, PsTo, TheBotnetGuy, Ultimate
+               : Plus everyone else who knows me
