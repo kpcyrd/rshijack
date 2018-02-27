@@ -5,7 +5,7 @@
 [crates-img]:   https://img.shields.io/crates/v/rshijack.svg
 [crates]:       https://crates.io/crates/rshijack
 
-tcp hijacking, rust rewrite of [shijack] from 2001.
+tcp connection hijacker, rust rewrite of [shijack] from 2001.
 
 This was written for TAMUctf 2018, brick house 100. The target was a telnet
 server that was protected by 2FA. Since the challenge wasn't authenticated,
