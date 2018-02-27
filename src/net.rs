@@ -4,11 +4,11 @@ use pnet::packet::tcp::MutableTcpPacket;
 use pnet::packet::ipv4::{MutableIpv4Packet, Ipv4Flags};
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::MutablePacket;
+use pnet::datalink::{self, NetworkInterface};
+use pnet::datalink::Channel::Ethernet;
 
 pub use pnet::packet::tcp::{TcpFlags, ipv4_checksum};
 
-
-use pcap::Capture;
 use nom::IResult::Done;
 use pktparse::ethernet;
 use pktparse::ipv4;
@@ -17,17 +17,26 @@ use pktparse::tcp;
 use std::net::IpAddr;
 use std::net::SocketAddrV4;
 
-use ::Result;
+use errors::{Result, ResultExt};
 
 
 pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Result<(u32, u32, usize)> {
-    let mut cap = Capture::from_device(interface)?
-                .open()?;
+    let interfaces = datalink::interfaces();
+    let interface = interfaces.into_iter()
+                        .filter(|iface: &NetworkInterface| iface.name == interface)
+                        .next()
+                        .chain_err(|| "Interface not found")?;
 
-    while let Ok(packet) = cap.next() {
+    let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
+        Ok(Ethernet(tx, rx)) => (tx, rx),
+        Ok(_) => bail!("Unhandled channel type"),
+        Err(e) => bail!("An error occurred when creating the datalink channel: {}", e)
+    };
+
+    while let Ok(packet) = rx.next() {
         trace!("received {:?}", packet);
 
-        if let Done(remaining, eth_frame) = ethernet::parse_ethernet_frame(&packet.data) {
+        if let Done(remaining, eth_frame) = ethernet::parse_ethernet_frame(&packet) {
             debug!("eth: {:?}", eth_frame);
 
             match eth_frame.ethertype {

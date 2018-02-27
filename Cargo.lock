@@ -179,14 +179,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pcap"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "libc 0.2.37 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "pktparse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -321,7 +313,6 @@ dependencies = [
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 3.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "pcap 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pktparse 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "pnet 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -534,7 +525,6 @@ dependencies = [
 "checksum memchr 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "148fab2e51b4f1cfc66da2a7c32981d1d3c083a803978268bb11fe4b86925e7a"
 "checksum memchr 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "796fba70e76612589ed2ce7f45282f5af869e0fdd7cc6199fa1aa1f1d591ba9d"
 "checksum nom 3.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "05aec50c70fd288702bcd93284a8444607f3292dbdf2a30de5ea5dcdbe72287b"
-"checksum pcap 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f912b9e56d1d4851a5175c118fc6503c9f69a8fe1a0649a51aff20b92c757491"
 "checksum pktparse 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "11b61707302ce93508f17003413e13e3bbdfdf2bd9e571ca4a788eb6c12a032f"
 "checksum pnet 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e866218222e997f8aeebbbda7761d29c3b75772573e65da68fff97c21c5754ad"
 "checksum pnet_base 0.20.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1ef91690b568c732663a6b4ccaf6e14fb62b985c9edee933c32c42d55f05a7b5"

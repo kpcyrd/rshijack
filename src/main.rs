@@ -1,6 +1,5 @@
 extern crate clap;
 extern crate env_logger;
-extern crate pcap;
 extern crate pktparse;
 extern crate nom;
 extern crate pnet;
@@ -12,14 +11,12 @@ pub mod net;
 
 mod errors {
     use std;
-    use pcap;
 
     error_chain! {
         foreign_links {
             Io(std::io::Error);
             ParseInt(std::num::ParseIntError);
             ParseAddress(std::net::AddrParseError);
-            Pcap(pcap::Error);
         }
     }
 }
