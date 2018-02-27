@@ -34,17 +34,18 @@ use net::TcpFlags;
 
 
 fn run() -> Result<()> {
-    if std::env::var("RUST_LOG").is_err() {
+    let arguments = Arguments::parse().chain_err(|| "failed to parse arguments")?;
+
+    if arguments.quiet == 0 && std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "rshijack=debug");
     }
 
     env_logger::init();
 
-    let arguments = Arguments::parse().chain_err(|| "failed to parse arguments")?;
     trace!("arguments: {:?}", arguments);
 
     println!("Waiting for SEQ/ACK to arrive from the srcip to the dstip.");
-    println!("(To speed things up, try making some traffic between the two, /msg person asdf\n");
+    println!("(To speed things up, try making some traffic between the two, /msg person asdf)");
 
     let (mut seq, ack, offset) = net::getseqack(&arguments.interface, &arguments.src, &arguments.dst)?;
     println!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", seq, ack);

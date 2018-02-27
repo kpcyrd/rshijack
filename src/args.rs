@@ -12,6 +12,7 @@ pub struct Arguments {
     pub dst: SocketAddrV4,
     pub reset: bool,
     pub send_null: bool,
+    pub quiet: u8,
 }
 
 impl Arguments {
@@ -44,6 +45,12 @@ shijack credited cyclozine for inspiration."#)
                 .long("send-null")
                 .help("Prevent a desync by sending 1kb of null bytes")
             )
+            .arg(Arg::with_name("quiet")
+                .short("q")
+                .long("quiet")
+                .help("Disable verbose output")
+                .multiple(true)
+            )
             .get_matches();
 
         let interface = matches.value_of("interface").unwrap();
@@ -51,6 +58,7 @@ shijack credited cyclozine for inspiration."#)
         let dst = matches.value_of("dst").unwrap();
         let reset = matches.occurrences_of("reset") > 0;
         let send_null = matches.occurrences_of("send-null") > 0;
+        let quiet = matches.occurrences_of("quiet") as u8;
 
         let src = src.parse().chain_err(|| "invalid src")?;
         let dst = dst.parse().chain_err(|| "invalid dst")?;
@@ -61,6 +69,7 @@ shijack credited cyclozine for inspiration."#)
             dst,
             reset,
             send_null,
+            quiet,
         })
     }
 }
