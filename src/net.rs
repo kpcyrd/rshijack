@@ -74,10 +74,8 @@ pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Res
         }
     }
 
-    panic!("Reading from interface failed!");
+    Err("Reading from interface failed!".into())
 }
-
-
 
 pub fn create_socket() -> Result<(TransportSender, TransportReceiver)> {
     let protocol = Layer3(IpNextHeaderProtocols::Tcp);
@@ -85,9 +83,7 @@ pub fn create_socket() -> Result<(TransportSender, TransportReceiver)> {
     Ok((tx, rx))
 }
 
-
-
-pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4, flags: u16, seq: u32, ack: u32, data: &[u8]) {
+pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4, flags: u16, seq: u32, ack: u32, data: &[u8]) -> Result<()> {
     let tcp_len = MutableTcpPacket::minimum_packet_size() + data.len();
     let total_len = MutableIpv4Packet::minimum_packet_size() + tcp_len;
 
@@ -96,7 +92,7 @@ pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4,
     // populate ipv4
     let ipv4_header_len = match MutableIpv4Packet::minimum_packet_size().checked_div(4) {
         Some(l) => l as u8,
-        None => panic!("Invalid header len")
+        None => bail!("Invalid header len")
     };
 
     let mut ipv4 = MutableIpv4Packet::new(&mut pkt_buf).unwrap();
@@ -117,7 +113,7 @@ pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4,
 
         let tcp_header_len = match MutableTcpPacket::minimum_packet_size().checked_div(4) {
             Some(l) => l as u8,
-            None => panic!("Invalid header len")
+            None => bail!("Invalid header len")
         };
         tcp.set_data_offset(tcp_header_len);
 
@@ -135,7 +131,9 @@ pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4,
     };
 
     match tx.send_to(ipv4, IpAddr::V4(dst.ip().clone())) {
-        Ok(bytes) => if bytes != total_len { panic!("short send count: {}", bytes) },
-        Err(e) => panic!("Could not send: {}", e),
+        Ok(bytes) => if bytes != total_len { bail!("short send count: {}", bytes) },
+        Err(e) => bail!("Could not send: {}", e),
     };
+
+    Ok(())
 }

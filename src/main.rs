@@ -55,7 +55,7 @@ fn run() -> Result<()> {
     seq += offset as u32;
 
     if arguments.reset {
-        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::RST, seq, 0, &[]);
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::RST, seq, 0, &[])?;
         println!("[+] Connection has been reset");
         return Ok(());
     }
@@ -64,7 +64,7 @@ fn run() -> Result<()> {
         info!("Sending 1kb of null bytes to prevent desync");
 
         let data = vec![0; 1024];
-        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data);
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data)?;
         seq += data.len() as u32;
     }
 
@@ -80,13 +80,13 @@ fn run() -> Result<()> {
             break;
         }
 
-        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data[..len]);
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data[..len])?;
 
         // bump seq afterwards
         seq += len as u32;
     }
 
-    net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::FIN, seq, ack, &[]);
+    net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::FIN, seq, ack, &[])?;
     println!("Exiting..");
 
     Ok(())
