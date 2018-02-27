@@ -19,7 +19,9 @@ impl Arguments {
         let matches = App::new("rshijack")
             .version(env!("CARGO_PKG_VERSION"))
             .setting(AppSettings::ColoredHelp)
-            .about("Rust rewrite of shijack")
+            .about("tcp connection hijacker, rust rewrite of shijack")
+            .after_help(r#"The original shijack in C was written by spwny and released around 2001.
+shijack credited cyclozine for inspiration."#)
             .arg(Arg::with_name("interface")
                 .required(true)
                 .help("The interface you are going to hijack on")
