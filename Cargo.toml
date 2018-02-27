@@ -8,6 +8,9 @@ repository = "https://github.com/kpcyrd/rshijack"
 categories = ["command-line-utilities"]
 readme = "README.md"
 
+[badges]
+travis-ci = { repository = "kpcyrd/rshijack" }
+
 [dependencies]
 clap = "2"
 pcap = "0.7"

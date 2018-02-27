@@ -1,4 +1,9 @@
-# rshijack
+# rshijack [![Build Status][travis-img]][travis] [![Crates.io][crates-img]][crates]
+
+[travis-img]:   https://travis-ci.org/kpcyrd/rshijack.svg?branch=master
+[travis]:       https://travis-ci.org/kpcyrd/rshijack
+[crates-img]:   https://img.shields.io/crates/v/rshijack.svg
+[crates]:       https://crates.io/crates/rshijack
 
 tcp hijacking, rust rewrite of [shijack] from 2001.
 
