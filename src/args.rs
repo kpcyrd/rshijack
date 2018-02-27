@@ -12,6 +12,7 @@ pub struct Arguments {
     pub dst: SocketAddrV4,
     pub reset: bool,
     pub send_null: bool,
+    pub quiet: u8,
 }
 
 impl Arguments {
@@ -19,7 +20,9 @@ impl Arguments {
         let matches = App::new("rshijack")
             .version(env!("CARGO_PKG_VERSION"))
             .setting(AppSettings::ColoredHelp)
-            .about("Rust rewrite of shijack")
+            .about("tcp connection hijacker, rust rewrite of shijack")
+            .after_help(r#"The original shijack in C was written by spwny and released around 2001.
+shijack credited cyclozine for inspiration."#)
             .arg(Arg::with_name("interface")
                 .required(true)
                 .help("The interface you are going to hijack on")
@@ -42,6 +45,12 @@ impl Arguments {
                 .long("send-null")
                 .help("Prevent a desync by sending 1kb of null bytes")
             )
+            .arg(Arg::with_name("quiet")
+                .short("q")
+                .long("quiet")
+                .help("Disable verbose output")
+                .multiple(true)
+            )
             .get_matches();
 
         let interface = matches.value_of("interface").unwrap();
@@ -49,6 +58,7 @@ impl Arguments {
         let dst = matches.value_of("dst").unwrap();
         let reset = matches.occurrences_of("reset") > 0;
         let send_null = matches.occurrences_of("send-null") > 0;
+        let quiet = matches.occurrences_of("quiet") as u8;
 
         let src = src.parse().chain_err(|| "invalid src")?;
         let dst = dst.parse().chain_err(|| "invalid dst")?;
@@ -59,6 +69,7 @@ impl Arguments {
             dst,
             reset,
             send_null,
+            quiet,
         })
     }
 }

