@@ -11,6 +11,7 @@ pub struct Arguments {
     pub src: SocketAddrV4,
     pub dst: SocketAddrV4,
     pub reset: bool,
+    pub send_null: bool,
 }
 
 impl Arguments {
@@ -36,12 +37,18 @@ impl Arguments {
                 .long("reset")
                 .help("Reset the connection rather than hijacking it")
             )
+            .arg(Arg::with_name("send-null")
+                .short("0")
+                .long("send-null")
+                .help("Prevent a desync by sending 1kb of null bytes")
+            )
             .get_matches();
 
         let interface = matches.value_of("interface").unwrap();
         let src = matches.value_of("src").unwrap();
         let dst = matches.value_of("dst").unwrap();
         let reset = matches.occurrences_of("reset") > 0;
+        let send_null = matches.occurrences_of("send-null") > 0;
 
         let src = src.parse().chain_err(|| "invalid src")?;
         let dst = dst.parse().chain_err(|| "invalid dst")?;
@@ -51,6 +58,7 @@ impl Arguments {
             src,
             dst,
             reset,
+            send_null,
         })
     }
 }

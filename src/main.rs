@@ -51,15 +51,22 @@ fn run() -> Result<()> {
 
     let (mut tx, _rx) = net::create_socket()?;
 
+    // bump seq
+    seq += offset as u32;
+
     if arguments.reset {
-        println!("TODO TODO TODO");
         net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::RST, seq, 0, &[]);
         println!("[+] Connection has been reset");
         return Ok(());
     }
 
-    // bump seq
-    seq += offset as u32;
+    if arguments.send_null {
+        info!("Sending 1kb of null bytes to prevent desync");
+
+        let data = vec![0; 1024];
+        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data);
+        seq += data.len() as u32;
+    }
 
     // get data for one packet
     let mut stdin = io::stdin();
