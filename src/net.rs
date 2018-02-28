@@ -20,7 +20,39 @@ use std::net::SocketAddrV4;
 use errors::{Result, ResultExt};
 
 
-pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Result<(u32, u32, usize)> {
+#[derive(Debug)]
+pub struct Connection {
+    pub src: SocketAddrV4,
+    pub dst: SocketAddrV4,
+    pub seq: u32,
+    pub ack: u32,
+}
+
+impl Connection {
+    #[inline]
+    pub fn new(src: SocketAddrV4, dst: SocketAddrV4, seq: u32, ack: u32) -> Connection {
+        Connection {
+            src,
+            dst,
+            seq,
+            ack,
+        }
+    }
+
+    #[inline]
+    pub fn sendtcp(&mut self, tx: &mut TransportSender, flags: u16, data: &[u8]) -> Result<()> {
+        sendtcp(tx, &self.src, &self.dst, flags, self.seq, self.ack, &data)?;
+        self.seq += data.len() as u32;
+        Ok(())
+    }
+
+    #[inline]
+    pub fn reset(&mut self, tx: &mut TransportSender) -> Result<()> {
+        sendtcp(tx, &self.src, &self.dst, TcpFlags::RST, self.seq, 0, &[])
+    }
+}
+
+pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Result<Connection> {
     let interfaces = datalink::interfaces();
     let interface = interfaces.into_iter()
                         .filter(|iface: &NetworkInterface| iface.name == interface)
@@ -57,8 +89,8 @@ pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Res
                                     debug!("tcp: {:?}", tcp_hdr);
 
                                     // skip packet if src/dst port doesn't match
-                                    if src.port() != tcp_hdr.source_port ||
-                                       dst.port() != tcp_hdr.dest_port {
+                                    if (src.port() != tcp_hdr.source_port && src.port() != 0) ||
+                                       (dst.port() != tcp_hdr.dest_port && dst.port() != 0) {
                                            continue;
                                     }
 
@@ -67,10 +99,11 @@ pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Res
                                             continue;
                                     }
 
-                                    return Ok((
-                                        tcp_hdr.sequence_no,
+                                    return Ok(Connection::new(
+                                        SocketAddrV4::new(ip_hdr.source_addr, tcp_hdr.source_port),
+                                        SocketAddrV4::new(ip_hdr.dest_addr, tcp_hdr.dest_port),
+                                        tcp_hdr.sequence_no + remaining.len() as u32,
                                         tcp_hdr.ack_no,
-                                        remaining.len(),
                                     ));
                                 }
                             },
