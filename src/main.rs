@@ -67,7 +67,7 @@ fn run() -> Result<()> {
         let (mut tx, _rx) = net::create_socket()?;
 
         let _recv = thread::spawn(move || {
-            net::sniff(&mut tx, &interface, &mut connection, &src, &dst).unwrap();
+            net::recv(&mut tx, &interface, &mut connection, &src, &dst).unwrap();
         });
     }
 

@@ -9,10 +9,12 @@ use pnet::datalink::Channel::Ethernet;
 
 pub use pnet::packet::tcp::{TcpFlags, ipv4_checksum};
 
+use log::Level;
 use nom::IResult::Done;
 use pktparse::ethernet;
 use pktparse::ipv4;
-use pktparse::tcp;
+use pktparse::tcp::{self, TcpHeader};
+use pktparse::ipv4::IPv4Header;
 
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
@@ -82,82 +84,68 @@ impl Connection {
     }
 }
 
+#[inline]
 pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Result<Connection> {
-    let interfaces = datalink::interfaces();
-    let interface = interfaces.into_iter()
-                        .filter(|iface: &NetworkInterface| iface.name == interface)
-                        .next()
-                        .chain_err(|| "Interface not found")?;
-
-    let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
-        Ok(Ethernet(tx, rx)) => (tx, rx),
-        Ok(_) => bail!("Unhandled channel type"),
-        Err(e) => bail!("An error occurred when creating the datalink channel: {}", e)
-    };
-
-    while let Ok(packet) = rx.next() {
-        trace!("received {:?}", packet);
-
-        if let Done(remaining, eth_frame) = ethernet::parse_ethernet_frame(&packet) {
-            debug!("eth: {:?}", eth_frame);
-
-            match eth_frame.ethertype {
-                ethernet::EtherType::IPv4 => {
-                    if let Done(remaining, ip_hdr) = ipv4::parse_ipv4_header(remaining) {
-                        debug!("ip4: {:?}", ip_hdr);
-
-                        // skip packet if src/dst ip doesn't match
-                        if *src.ip() != ip_hdr.source_addr ||
-                           *dst.ip() != ip_hdr.dest_addr {
-                               continue;
-                        }
-
-                        match ip_hdr.protocol {
-                            ipv4::IPv4Protocol::TCP => {
-
-                                if let Done(remaining, tcp_hdr) = tcp::parse_tcp_header(remaining) {
-                                    debug!("tcp: {:?}", tcp_hdr);
-
-                                    // skip packet if src/dst port doesn't match
-                                    if (src.port() != tcp_hdr.source_port && src.port() != 0) ||
-                                       (dst.port() != tcp_hdr.dest_port && dst.port() != 0) {
-                                           continue;
-                                    }
-
-                                    // skip packet if ack flag not set
-                                    if !tcp_hdr.flag_ack {
-                                            continue;
-                                    }
-
-                                    return Ok(Connection::new(
-                                        SocketAddrV4::new(ip_hdr.source_addr, tcp_hdr.source_port),
-                                        SocketAddrV4::new(ip_hdr.dest_addr, tcp_hdr.dest_port),
-                                        tcp_hdr.sequence_no + remaining.len() as u32,
-                                        tcp_hdr.ack_no,
-                                    ));
-                                }
-                            },
-                            _ => (),
-                        }
-                    }
-                },
-                _ => (),
-            }
+    sniff(interface, Level::Debug, src, dst, |ip_hdr, tcp_hdr, remaining| {
+        // skip packet if src/dst port doesn't match
+        if (src.port() != tcp_hdr.source_port && src.port() != 0) ||
+           (dst.port() != tcp_hdr.dest_port && dst.port() != 0) {
+                return Ok(None);
         }
-    }
 
-    Err("Reading from interface failed!".into())
+        // skip packet if ack flag not set
+        if !tcp_hdr.flag_ack {
+            return Ok(None);
+        }
+
+        Ok(Some(Connection::new(
+            SocketAddrV4::new(ip_hdr.source_addr, tcp_hdr.source_port),
+            SocketAddrV4::new(ip_hdr.dest_addr, tcp_hdr.dest_port),
+            tcp_hdr.sequence_no + remaining.len() as u32,
+            tcp_hdr.ack_no,
+        )))
+    })
 }
 
 
-pub fn sniff(tx: &mut TransportSender, interface: &str, connection: &mut Connection, src: &SocketAddrV4, dst: &SocketAddrV4) -> Result<Connection> {
+#[inline]
+pub fn recv(tx: &mut TransportSender, interface: &str, connection: &mut Connection, src: &SocketAddrV4, dst: &SocketAddrV4) -> Result<()> {
+    let mut stdout = io::stdout();
+
+    sniff(interface, Level::Trace, src, dst, |_ip_hdr, tcp_hdr, remaining| {
+        // skip packet if src/dst port doesn't match
+        if src.port() != tcp_hdr.source_port ||
+           dst.port() != tcp_hdr.dest_port {
+                return Ok(None);
+        }
+
+        // skip packet if psh flag not set
+        if !tcp_hdr.flag_psh {
+            return Ok(None);
+        }
+
+        if connection.get_ack() >= tcp_hdr.sequence_no + remaining.len() as u32 {
+            // filter duplicate packets
+            return Ok(None);
+        }
+
+        stdout.write(remaining).unwrap();
+        stdout.flush().unwrap();
+
+        connection.ack(tx, tcp_hdr.sequence_no, remaining)?;
+
+        Ok(None)
+    })
+}
+
+
+pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddrV4, dst: &SocketAddrV4, mut callback: F) -> Result<T>
+        where F: FnMut(IPv4Header, TcpHeader, &[u8]) -> Result<Option<T>> {
     let interfaces = datalink::interfaces();
     let interface = interfaces.into_iter()
                         .filter(|iface: &NetworkInterface| iface.name == interface)
                         .next()
                         .chain_err(|| "Interface not found")?;
-
-    let mut stdout = io::stdout();
 
     let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
         Ok(Ethernet(tx, rx)) => (tx, rx),
@@ -169,12 +157,12 @@ pub fn sniff(tx: &mut TransportSender, interface: &str, connection: &mut Connect
         trace!("received {:?}", packet);
 
         if let Done(remaining, eth_frame) = ethernet::parse_ethernet_frame(&packet) {
-            trace!("eth: {:?}", eth_frame);
+            log!(log_level, "eth: {:?}", eth_frame);
 
             match eth_frame.ethertype {
                 ethernet::EtherType::IPv4 => {
                     if let Done(remaining, ip_hdr) = ipv4::parse_ipv4_header(remaining) {
-                        trace!("ip4: {:?}", ip_hdr);
+                        log!(log_level, "ip4: {:?}", ip_hdr);
 
                         // skip packet if src/dst ip doesn't match
                         if *src.ip() != ip_hdr.source_addr ||
@@ -186,28 +174,11 @@ pub fn sniff(tx: &mut TransportSender, interface: &str, connection: &mut Connect
                             ipv4::IPv4Protocol::TCP => {
 
                                 if let Done(remaining, tcp_hdr) = tcp::parse_tcp_header(remaining) {
-                                    trace!("tcp: {:?}", tcp_hdr);
+                                    log!(log_level, "tcp: {:?}", tcp_hdr);
 
-                                    // skip packet if src/dst port doesn't match
-                                    if src.port() != tcp_hdr.source_port ||
-                                       dst.port() != tcp_hdr.dest_port {
-                                           continue;
+                                    if let Some(result) = callback(ip_hdr, tcp_hdr, remaining)? {
+                                        return Ok(result);
                                     }
-
-                                    // skip packet if psh flag not set
-                                    if !tcp_hdr.flag_psh {
-                                            continue;
-                                    }
-
-                                    if connection.get_ack() >= tcp_hdr.sequence_no + remaining.len() as u32 {
-                                        // filter duplicate packets
-                                        continue;
-                                    }
-
-                                    stdout.write(remaining).unwrap();
-                                    stdout.flush().unwrap();
-
-                                    connection.ack(tx, tcp_hdr.sequence_no, remaining)?;
                                 }
                             },
                             _ => (),
