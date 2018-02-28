@@ -42,17 +42,17 @@ fn run() -> Result<()> {
 
     trace!("arguments: {:?}", arguments);
 
-    println!("Waiting for SEQ/ACK to arrive from the srcip to the dstip.");
-    println!("(To speed things up, try making some traffic between the two, /msg person asdf)");
+    eprintln!("Waiting for SEQ/ACK to arrive from the srcip to the dstip.");
+    eprintln!("(To speed things up, try making some traffic between the two, /msg person asdf)");
 
     let mut connection = net::getseqack(&arguments.interface, &arguments.src, &arguments.dst)?;
-    println!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", connection.get_seq(), connection.get_ack());
+    eprintln!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", connection.get_seq(), connection.get_ack());
 
     let (mut tx, _rx) = net::create_socket()?;
 
     if arguments.reset {
         connection.reset(&mut tx)?;
-        println!("[+] Connection has been reset");
+        eprintln!("[+] Connection has been reset");
         return Ok(());
     }
 
@@ -78,8 +78,8 @@ fn run() -> Result<()> {
         connection.sendtcp(&mut tx, TcpFlags::ACK | TcpFlags::PSH, &data)?;
     }
 
-    println!("Starting hijack session, Please use ^D to terminate.");
-    println!("Anything you enter from now on is sent to the hijacked TCP connection.");
+    eprintln!("Starting hijack session, Please use ^D to terminate.");
+    eprintln!("Anything you enter from now on is sent to the hijacked TCP connection.");
 
     let mut stdin = io::stdin();
     let mut data = vec![0; 512];
@@ -94,7 +94,7 @@ fn run() -> Result<()> {
     }
 
     connection.sendtcp(&mut tx, TcpFlags::ACK | TcpFlags::FIN, &[])?;
-    println!("Exiting..");
+    eprintln!("Exiting..");
 
     Ok(())
 }
