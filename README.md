@@ -30,6 +30,13 @@ The other tools in that screenshot are [sniffglue] and [arpspoof].
 [sniffglue]: https://github.com/kpcyrd/sniffglue
 [arpspoof]: https://su2.info/doc/arpspoof.php
 
+## Docker
+
+If needed, rshijack can be pulled as a docker image. The image is currently
+about 10.2MB.
+
+    docker run -it --init --rm --net=host kpcyrd/rshijack eth0 172.16.13.20:37386 172.16.13.19:23
+
 ## License
 
 GPLv3+
