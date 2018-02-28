@@ -26,6 +26,7 @@ use error_chain::ChainedError;
 use errors::ResultExt;
 
 use std::io::{self, Read};
+use std::thread;
 use args::Arguments;
 use net::TcpFlags;
 
@@ -45,7 +46,7 @@ fn run() -> Result<()> {
     println!("(To speed things up, try making some traffic between the two, /msg person asdf)");
 
     let mut connection = net::getseqack(&arguments.interface, &arguments.src, &arguments.dst)?;
-    println!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", connection.seq, connection.ack);
+    println!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", connection.get_seq(), connection.get_ack());
 
     let (mut tx, _rx) = net::create_socket()?;
 
@@ -53,6 +54,21 @@ fn run() -> Result<()> {
         connection.reset(&mut tx)?;
         println!("[+] Connection has been reset");
         return Ok(());
+    }
+
+    {
+        let mut connection = connection.clone();
+        let interface = arguments.interface.clone();
+
+        // arguments are flipped for receiving
+        let dst = connection.src.clone();
+        let src = connection.dst.clone();
+
+        let (mut tx, _rx) = net::create_socket()?;
+
+        let _recv = thread::spawn(move || {
+            net::sniff(&mut tx, &interface, &mut connection, &src, &dst).unwrap();
+        });
     }
 
     if arguments.send_null {

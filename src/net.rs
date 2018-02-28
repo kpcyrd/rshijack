@@ -14,18 +14,19 @@ use pktparse::ethernet;
 use pktparse::ipv4;
 use pktparse::tcp;
 
-use std::net::IpAddr;
-use std::net::SocketAddrV4;
+use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
+use std::net::{IpAddr, SocketAddrV4};
 
 use errors::{Result, ResultExt};
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Connection {
     pub src: SocketAddrV4,
     pub dst: SocketAddrV4,
-    pub seq: u32,
-    pub ack: u32,
+    pub seq: Arc<Mutex<u32>>,
+    pub ack: Arc<Mutex<u32>>,
 }
 
 impl Connection {
@@ -34,21 +35,50 @@ impl Connection {
         Connection {
             src,
             dst,
-            seq,
-            ack,
+            seq: Arc::new(Mutex::new(seq)),
+            ack: Arc::new(Mutex::new(ack)),
         }
     }
 
     #[inline]
+    pub fn bump_seq(&self, inc: u32) {
+        let mut guard = self.seq.lock().unwrap();
+        *guard += inc;
+    }
+
+    #[inline]
+    pub fn set_ack(&self, ack: u32) {
+        let mut guard = self.ack.lock().unwrap();
+        *guard = ack;
+    }
+
+    #[inline]
+    pub fn get_seq(&self) -> u32 {
+        (*self.seq.lock().unwrap()).clone()
+    }
+
+    #[inline]
+    pub fn get_ack(&self) -> u32 {
+        (*self.ack.lock().unwrap()).clone()
+    }
+
+    #[inline]
     pub fn sendtcp(&mut self, tx: &mut TransportSender, flags: u16, data: &[u8]) -> Result<()> {
-        sendtcp(tx, &self.src, &self.dst, flags, self.seq, self.ack, &data)?;
-        self.seq += data.len() as u32;
+        sendtcp(tx, &self.src, &self.dst, flags, self.get_seq(), self.get_ack(), &data)?;
+        self.bump_seq(data.len() as u32);
         Ok(())
     }
 
     #[inline]
+    pub fn ack(&mut self, tx: &mut TransportSender, mut ack: u32, data: &[u8]) -> Result<()> {
+        ack += data.len() as u32;
+        self.set_ack(ack);
+        sendtcp(tx, &self.src, &self.dst, TcpFlags::ACK, self.get_seq(), ack, &[])
+    }
+
+    #[inline]
     pub fn reset(&mut self, tx: &mut TransportSender) -> Result<()> {
-        sendtcp(tx, &self.src, &self.dst, TcpFlags::RST, self.seq, 0, &[])
+        sendtcp(tx, &self.src, &self.dst, TcpFlags::RST, self.get_seq(), 0, &[])
     }
 }
 
@@ -119,6 +149,79 @@ pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Res
     Err("Reading from interface failed!".into())
 }
 
+
+pub fn sniff(tx: &mut TransportSender, interface: &str, connection: &mut Connection, src: &SocketAddrV4, dst: &SocketAddrV4) -> Result<Connection> {
+    let interfaces = datalink::interfaces();
+    let interface = interfaces.into_iter()
+                        .filter(|iface: &NetworkInterface| iface.name == interface)
+                        .next()
+                        .chain_err(|| "Interface not found")?;
+
+    let mut stdout = io::stdout();
+
+    let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
+        Ok(Ethernet(tx, rx)) => (tx, rx),
+        Ok(_) => bail!("Unhandled channel type"),
+        Err(e) => bail!("An error occurred when creating the datalink channel: {}", e)
+    };
+
+    while let Ok(packet) = rx.next() {
+        trace!("received {:?}", packet);
+
+        if let Done(remaining, eth_frame) = ethernet::parse_ethernet_frame(&packet) {
+            trace!("eth: {:?}", eth_frame);
+
+            match eth_frame.ethertype {
+                ethernet::EtherType::IPv4 => {
+                    if let Done(remaining, ip_hdr) = ipv4::parse_ipv4_header(remaining) {
+                        trace!("ip4: {:?}", ip_hdr);
+
+                        // skip packet if src/dst ip doesn't match
+                        if *src.ip() != ip_hdr.source_addr ||
+                           *dst.ip() != ip_hdr.dest_addr {
+                               continue;
+                        }
+
+                        match ip_hdr.protocol {
+                            ipv4::IPv4Protocol::TCP => {
+
+                                if let Done(remaining, tcp_hdr) = tcp::parse_tcp_header(remaining) {
+                                    trace!("tcp: {:?}", tcp_hdr);
+
+                                    // skip packet if src/dst port doesn't match
+                                    if src.port() != tcp_hdr.source_port ||
+                                       dst.port() != tcp_hdr.dest_port {
+                                           continue;
+                                    }
+
+                                    // skip packet if psh flag not set
+                                    if !tcp_hdr.flag_psh {
+                                            continue;
+                                    }
+
+                                    if connection.get_ack() >= tcp_hdr.sequence_no + remaining.len() as u32 {
+                                        // filter duplicate packets
+                                        continue;
+                                    }
+
+                                    stdout.write(remaining).unwrap();
+                                    stdout.flush().unwrap();
+
+                                    connection.ack(tx, tcp_hdr.sequence_no, remaining)?;
+                                }
+                            },
+                            _ => (),
+                        }
+                    }
+                },
+                _ => (),
+            }
+        }
+    }
+
+    Err("Reading from interface failed!".into())
+}
+
 pub fn create_socket() -> Result<(TransportSender, TransportReceiver)> {
     let protocol = Layer3(IpNextHeaderProtocols::Tcp);
     let (tx, rx) = transport_channel(4096, protocol)?;
@@ -164,7 +267,12 @@ pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4,
         tcp.set_sequence(seq);
         tcp.set_acknowledgement(ack);
         tcp.set_flags(flags);
-        tcp.set_window(data.len() as u16);
+        // set minimum window for ack packets
+        let mut window = data.len() as u16;
+        if window == 0 {
+            window = 4;
+        }
+        tcp.set_window(window);
 
         tcp.set_payload(data);
 
