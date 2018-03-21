@@ -13,7 +13,7 @@ travis-ci = { repository = "kpcyrd/rshijack" }
 
 [dependencies]
 clap = "2"
-pnet = "0.20"
+pnet = "0.21"
 env_logger = "0.5"
 log = "0.4"
 error-chain = "0.11"
