@@ -247,7 +247,7 @@ pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4,
 
         tcp.set_payload(data);
 
-        let chk = ipv4_checksum(&tcp.to_immutable(), src.ip().clone(), dst.ip().clone());
+        let chk = ipv4_checksum(&tcp.to_immutable(), src.ip(), dst.ip());
         tcp.set_checksum(chk);
     };
 
