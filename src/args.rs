@@ -10,6 +10,8 @@ pub struct Arguments {
     pub interface: String,
     pub src: SocketAddrV4,
     pub dst: SocketAddrV4,
+    pub seq: u32,
+    pub ack: u32,
     pub reset: bool,
     pub send_null: bool,
     pub quiet: u8,
@@ -35,6 +37,14 @@ shijack credited cyclozine for inspiration."#)
                 .required(true)
                 .help("The destination of the connection")
             )
+            .arg(Arg::with_name("seq")
+                .required(true)
+                .help("Initial seq number")
+            )
+            .arg(Arg::with_name("ack")
+                .required(true)
+                .help("Initial ack number")
+            )
             .arg(Arg::with_name("reset")
                 .short("r")
                 .long("reset")
@@ -56,6 +66,8 @@ shijack credited cyclozine for inspiration."#)
         let interface = matches.value_of("interface").unwrap();
         let src = matches.value_of("src").unwrap();
         let dst = matches.value_of("dst").unwrap();
+        let seq = matches.value_of("seq").unwrap().parse::<u32>().unwrap();
+        let ack = matches.value_of("ack").unwrap().parse::<u32>().unwrap();
         let reset = matches.occurrences_of("reset") > 0;
         let send_null = matches.occurrences_of("send-null") > 0;
         let quiet = matches.occurrences_of("quiet") as u8;
@@ -67,6 +79,8 @@ shijack credited cyclozine for inspiration."#)
             interface: interface.into(),
             src,
             dst,
+            seq,
+            ack,
             reset,
             send_null,
             quiet,

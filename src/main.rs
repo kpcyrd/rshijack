@@ -30,6 +30,7 @@ use std::thread;
 use args::Arguments;
 use net::TcpFlags;
 
+use std::net::SocketAddrV4;
 
 fn run() -> Result<()> {
     let arguments = Arguments::parse().chain_err(|| "failed to parse arguments")?;
@@ -45,7 +46,12 @@ fn run() -> Result<()> {
     eprintln!("Waiting for SEQ/ACK to arrive from the srcip to the dstip.");
     eprintln!("(To speed things up, try making some traffic between the two, /msg person asdf)");
 
-    let mut connection = net::getseqack(&arguments.interface, &arguments.src, &arguments.dst)?;
+    let mut connection = net::Connection::new(
+        SocketAddrV4::new(*arguments.src.ip(), arguments.src.port()),
+        SocketAddrV4::new(*arguments.dst.ip(), arguments.dst.port()),
+        arguments.seq,
+        arguments.ack,
+    );
     eprintln!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", connection.get_seq(), connection.get_ack());
 
     let (mut tx, _rx) = net::create_socket()?;
