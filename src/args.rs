@@ -1,4 +1,4 @@
-use std::net::SocketAddrV4;
+use std::net::SocketAddr;
 use structopt::StructOpt;
 use structopt::clap::AppSettings;
 
@@ -10,9 +10,9 @@ pub struct Args {
     /// The interface you are going to hijack on
     pub interface: String,
     /// The source of the connection
-    pub src: SocketAddrV4,
+    pub src: SocketAddr,
     /// The destination of the connection
-    pub dst: SocketAddrV4,
+    pub dst: SocketAddr,
     /// Reset the connection rather than hijacking it
     #[structopt(short="r", long)]
     pub reset: bool,

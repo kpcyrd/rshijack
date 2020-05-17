@@ -2,38 +2,37 @@ use pnet::transport::{TransportSender, TransportReceiver, transport_channel};
 use pnet::transport::TransportChannelType::Layer3;
 use pnet::packet::tcp::MutableTcpPacket;
 use pnet::packet::ipv4::{MutableIpv4Packet, Ipv4Flags};
+use pnet::packet::ipv6::MutableIpv6Packet;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::MutablePacket;
 use pnet::datalink::{self, NetworkInterface};
 use pnet::datalink::Channel::Ethernet;
 
-pub use pnet::packet::tcp::{TcpFlags, ipv4_checksum};
+pub use pnet::packet::tcp::{TcpFlags, ipv4_checksum, ipv6_checksum};
 
 use log::Level;
 use pktparse::ethernet;
-use pktparse::ip;
-use pktparse::ipv4;
+use pktparse::{ip, ipv4, ipv6};
 use pktparse::tcp::{self, TcpHeader};
-use pktparse::ipv4::IPv4Header;
 
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
-use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
+use std::net::{IpAddr, SocketAddr, Ipv4Addr, SocketAddrV4, Ipv6Addr, SocketAddrV6};
 
 use crate::errors::*;
 
 
 #[derive(Debug, Clone)]
 pub struct Connection {
-    pub src: SocketAddrV4,
-    pub dst: SocketAddrV4,
+    pub src: SocketAddr,
+    pub dst: SocketAddr,
     pub seq: Arc<Mutex<u32>>,
     pub ack: Arc<Mutex<u32>>,
 }
 
 impl Connection {
     #[inline]
-    pub fn new(src: SocketAddrV4, dst: SocketAddrV4, seq: u32, ack: u32) -> Connection {
+    pub fn new(src: SocketAddr, dst: SocketAddr, seq: u32, ack: u32) -> Connection {
         Connection {
             src,
             dst,
@@ -84,8 +83,13 @@ impl Connection {
     }
 }
 
+pub struct IPHeader {
+    source_addr: IpAddr,
+    dest_addr: IpAddr,
+}
+
 #[inline]
-pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Result<Connection> {
+pub fn getseqack(interface: &str, src: &SocketAddr, dst: &SocketAddr) -> Result<Connection> {
     sniff(interface, Level::Debug, src, dst, |ip_hdr, tcp_hdr, remaining| {
         // skip packet if src/dst port doesn't match
         if (src.port() != tcp_hdr.source_port && src.port() != 0) ||
@@ -99,8 +103,8 @@ pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Res
         }
 
         Ok(Some(Connection::new(
-            SocketAddrV4::new(ip_hdr.source_addr, tcp_hdr.source_port),
-            SocketAddrV4::new(ip_hdr.dest_addr, tcp_hdr.dest_port),
+            SocketAddr::new(ip_hdr.source_addr, tcp_hdr.source_port),
+            SocketAddr::new(ip_hdr.dest_addr, tcp_hdr.dest_port),
             tcp_hdr.sequence_no + remaining.len() as u32,
             tcp_hdr.ack_no,
         )))
@@ -109,7 +113,7 @@ pub fn getseqack(interface: &str, src: &SocketAddrV4, dst: &SocketAddrV4) -> Res
 
 
 #[inline]
-pub fn recv(tx: &mut TransportSender, interface: &str, connection: &mut Connection, src: &SocketAddrV4, dst: &SocketAddrV4) -> Result<()> {
+pub fn recv(tx: &mut TransportSender, interface: &str, connection: &mut Connection, src: &SocketAddr, dst: &SocketAddr) -> Result<()> {
     let mut stdout = io::stdout();
 
     sniff(interface, Level::Trace, src, dst, |_ip_hdr, tcp_hdr, remaining| {
@@ -146,8 +150,16 @@ fn ipv4_addr_match(filter: &Ipv4Addr, actual: &Ipv4Addr) -> bool {
     }
 }
 
-pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddrV4, dst: &SocketAddrV4, mut callback: F) -> Result<T>
-        where F: FnMut(IPv4Header, TcpHeader, &[u8]) -> Result<Option<T>> {
+fn ipv6_addr_match(filter: &Ipv6Addr, actual: &Ipv6Addr) -> bool {
+    if filter == &Ipv6Addr::UNSPECIFIED {
+        true
+    } else {
+        filter == actual
+    }
+}
+
+pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddr, dst: &SocketAddr, mut callback: F) -> Result<T>
+        where F: FnMut(IPHeader, TcpHeader, &[u8]) -> Result<Option<T>> {
     let interfaces = datalink::interfaces();
     let interface = interfaces.into_iter()
                         .filter(|iface: &NetworkInterface| iface.name == interface)
@@ -166,8 +178,8 @@ pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddrV4, dst: &
         if let Ok((remaining, eth_frame)) = ethernet::parse_ethernet_frame(&packet) {
             log!(log_level, "eth: {:?}", eth_frame);
 
-            match eth_frame.ethertype {
-                ethernet::EtherType::IPv4 => {
+            match (eth_frame.ethertype, src, dst) {
+                (ethernet::EtherType::IPv4, SocketAddr::V4(src), SocketAddr::V4(dst)) => {
                     if let Ok((remaining, ip_hdr)) = ipv4::parse_ipv4_header(remaining) {
                         log!(log_level, "ip4: {:?}", ip_hdr);
 
@@ -179,10 +191,41 @@ pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddrV4, dst: &
 
                         match ip_hdr.protocol {
                             ip::IPProtocol::TCP => {
-
                                 if let Ok((remaining, tcp_hdr)) = tcp::parse_tcp_header(remaining) {
                                     log!(log_level, "tcp: {:?}", tcp_hdr);
 
+                                    let ip_hdr = IPHeader {
+                                        source_addr: IpAddr::V4(ip_hdr.source_addr),
+                                        dest_addr: IpAddr::V4(ip_hdr.dest_addr),
+                                    };
+                                    if let Some(result) = callback(ip_hdr, tcp_hdr, remaining)? {
+                                        return Ok(result);
+                                    }
+                                }
+                            },
+                            _ => (),
+                        }
+                    }
+                },
+                (ethernet::EtherType::IPv6, SocketAddr::V6(src), SocketAddr::V6(dst)) => {
+                    if let Ok((remaining, ip_hdr)) = ipv6::parse_ipv6_header(remaining) {
+                        log!(log_level, "ip4: {:?}", ip_hdr);
+
+                        // skip packet if src/dst ip doesn't match
+                        if !ipv6_addr_match(src.ip(), &ip_hdr.source_addr) ||
+                           !ipv6_addr_match(dst.ip(), &ip_hdr.dest_addr) {
+                               continue;
+                        }
+
+                        match ip_hdr.next_header {
+                            ip::IPProtocol::TCP => {
+                                if let Ok((remaining, tcp_hdr)) = tcp::parse_tcp_header(remaining) {
+                                    log!(log_level, "tcp: {:?}", tcp_hdr);
+
+                                    let ip_hdr = IPHeader {
+                                        source_addr: IpAddr::V6(ip_hdr.source_addr),
+                                        dest_addr: IpAddr::V6(ip_hdr.dest_addr),
+                                    };
                                     if let Some(result) = callback(ip_hdr, tcp_hdr, remaining)? {
                                         return Ok(result);
                                     }
@@ -206,7 +249,15 @@ pub fn create_socket() -> Result<(TransportSender, TransportReceiver)> {
     Ok((tx, rx))
 }
 
-pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4, flags: u16, seq: u32, ack: u32, data: &[u8]) -> Result<()> {
+pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddr, dst: &SocketAddr, flags: u16, seq: u32, ack: u32, data: &[u8]) -> Result<()> {
+    match (src, dst) {
+        (SocketAddr::V4(src), SocketAddr::V4(dst)) => sendtcpv4(tx, src, dst, flags, seq, ack, data),
+        (SocketAddr::V6(src), SocketAddr::V6(dst)) => sendtcpv6(tx, src, dst, flags, seq, ack, data),
+        _ => bail!("Invalid ipv4/ipv6 combination"),
+    }
+}
+
+pub fn sendtcpv4(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4, flags: u16, seq: u32, ack: u32, data: &[u8]) -> Result<()> {
     let tcp_len = MutableTcpPacket::minimum_packet_size() + data.len();
     let total_len = MutableIpv4Packet::minimum_packet_size() + tcp_len;
 
@@ -231,37 +282,71 @@ pub fn sendtcp(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV4,
     ipv4.set_options(&[]);
 
     // populate tcp
-    {
-        let mut tcp = MutableTcpPacket::new(ipv4.payload_mut()).unwrap();
-
-        let tcp_header_len = match MutableTcpPacket::minimum_packet_size().checked_div(4) {
-            Some(l) => l as u8,
-            None => bail!("Invalid header len")
-        };
-        tcp.set_data_offset(tcp_header_len);
-
-        tcp.set_source(src.port());
-        tcp.set_destination(dst.port());
-        tcp.set_sequence(seq);
-        tcp.set_acknowledgement(ack);
-        tcp.set_flags(flags);
-        // set minimum window for ack packets
-        let mut window = data.len() as u16;
-        if window == 0 {
-            window = 4;
-        }
-        tcp.set_window(window);
-
-        tcp.set_payload(data);
-
-        let chk = ipv4_checksum(&tcp.to_immutable(), src.ip(), dst.ip());
-        tcp.set_checksum(chk);
-    };
+    gentcp(ipv4.payload_mut(), &SocketAddr::V4(*src), &SocketAddr::V4(*dst), flags, seq, ack, data)?;
 
     match tx.send_to(ipv4, IpAddr::V4(dst.ip().clone())) {
         Ok(bytes) => if bytes != total_len { bail!("short send count: {}", bytes) },
         Err(e) => bail!("Could not send: {}", e),
     };
 
+    Ok(())
+}
+
+pub fn sendtcpv6(tx: &mut TransportSender, src: &SocketAddrV6, dst: &SocketAddrV6, flags: u16, seq: u32, ack: u32, data: &[u8]) -> Result<()> {
+    let tcp_len = MutableTcpPacket::minimum_packet_size() + data.len();
+    let total_len = MutableIpv6Packet::minimum_packet_size() + tcp_len;
+
+    let mut pkt_buf: Vec<u8> = vec![0; total_len];
+
+    // populate ipv6
+    let mut ipv6 = MutableIpv6Packet::new(&mut pkt_buf).unwrap();
+    ipv6.set_payload_length(tcp_len as u16);
+
+    ipv6.set_next_header(IpNextHeaderProtocols::Tcp);
+    ipv6.set_source(src.ip().to_owned());
+    ipv6.set_version(6);
+    ipv6.set_hop_limit(64);
+    ipv6.set_destination(dst.ip().clone());
+
+    // populate tcp
+    gentcp(ipv6.payload_mut(), &SocketAddr::V6(*src), &SocketAddr::V6(*dst), flags, seq, ack, data)?;
+
+    match tx.send_to(ipv6, IpAddr::V6(dst.ip().clone())) {
+        Ok(bytes) => if bytes != total_len { bail!("short send count: {}", bytes) },
+        Err(e) => bail!("Could not send: {}", e),
+    };
+
+    Ok(())
+}
+
+fn gentcp(payload_mut: &mut [u8], src: &SocketAddr, dst: &SocketAddr, flags: u16, seq: u32, ack: u32, data: &[u8]) -> Result<()> {
+    let mut tcp = MutableTcpPacket::new(payload_mut).unwrap();
+
+    let tcp_header_len = match MutableTcpPacket::minimum_packet_size().checked_div(4) {
+        Some(l) => l as u8,
+        None => bail!("Invalid header len")
+    };
+    tcp.set_data_offset(tcp_header_len);
+
+    tcp.set_source(src.port());
+    tcp.set_destination(dst.port());
+    tcp.set_sequence(seq);
+    tcp.set_acknowledgement(ack);
+    tcp.set_flags(flags);
+    // set minimum window for ack packets
+    let mut window = data.len() as u16;
+    if window == 0 {
+        window = 4;
+    }
+    tcp.set_window(window);
+
+    tcp.set_payload(data);
+
+    let chk = match (src, dst) {
+        (SocketAddr::V4(src), SocketAddr::V4(dst)) => ipv4_checksum(&tcp.to_immutable(), src.ip(), dst.ip()),
+        (SocketAddr::V6(src), SocketAddr::V6(dst)) => ipv6_checksum(&tcp.to_immutable(), src.ip(), dst.ip()),
+        _ => bail!("Invalid ipv4/ipv6 combination"),
+    };
+    tcp.set_checksum(chk);
     Ok(())
 }
