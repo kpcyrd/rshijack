@@ -10,17 +10,17 @@ use pnet::datalink::Channel::Ethernet;
 pub use pnet::packet::tcp::{TcpFlags, ipv4_checksum};
 
 use log::Level;
-use nom::IResult::Done;
 use pktparse::ethernet;
+use pktparse::ip;
 use pktparse::ipv4;
 use pktparse::tcp::{self, TcpHeader};
 use pktparse::ipv4::IPv4Header;
 
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
-use std::net::{IpAddr, SocketAddrV4};
+use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
 
-use errors::{Result, ResultExt};
+use crate::errors::*;
 
 
 #[derive(Debug, Clone)]
@@ -138,6 +138,13 @@ pub fn recv(tx: &mut TransportSender, interface: &str, connection: &mut Connecti
     })
 }
 
+fn ipv4_addr_match(filter: &Ipv4Addr, actual: &Ipv4Addr) -> bool {
+    if filter == &Ipv4Addr::UNSPECIFIED {
+        true
+    } else {
+        filter == actual
+    }
+}
 
 pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddrV4, dst: &SocketAddrV4, mut callback: F) -> Result<T>
         where F: FnMut(IPv4Header, TcpHeader, &[u8]) -> Result<Option<T>> {
@@ -145,7 +152,7 @@ pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddrV4, dst: &
     let interface = interfaces.into_iter()
                         .filter(|iface: &NetworkInterface| iface.name == interface)
                         .next()
-                        .chain_err(|| "Interface not found")?;
+                        .context("Interface not found")?;
 
     let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
         Ok(Ethernet(tx, rx)) => (tx, rx),
@@ -156,24 +163,24 @@ pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddrV4, dst: &
     while let Ok(packet) = rx.next() {
         trace!("received {:?}", packet);
 
-        if let Done(remaining, eth_frame) = ethernet::parse_ethernet_frame(&packet) {
+        if let Ok((remaining, eth_frame)) = ethernet::parse_ethernet_frame(&packet) {
             log!(log_level, "eth: {:?}", eth_frame);
 
             match eth_frame.ethertype {
                 ethernet::EtherType::IPv4 => {
-                    if let Done(remaining, ip_hdr) = ipv4::parse_ipv4_header(remaining) {
+                    if let Ok((remaining, ip_hdr)) = ipv4::parse_ipv4_header(remaining) {
                         log!(log_level, "ip4: {:?}", ip_hdr);
 
                         // skip packet if src/dst ip doesn't match
-                        if *src.ip() != ip_hdr.source_addr ||
-                           *dst.ip() != ip_hdr.dest_addr {
+                        if !ipv4_addr_match(src.ip(), &ip_hdr.source_addr) ||
+                           !ipv4_addr_match(dst.ip(), &ip_hdr.dest_addr) {
                                continue;
                         }
 
                         match ip_hdr.protocol {
-                            ipv4::IPv4Protocol::TCP => {
+                            ip::IPProtocol::TCP => {
 
-                                if let Done(remaining, tcp_hdr) = tcp::parse_tcp_header(remaining) {
+                                if let Ok((remaining, tcp_hdr)) = tcp::parse_tcp_header(remaining) {
                                     log!(log_level, "tcp: {:?}", tcp_hdr);
 
                                     if let Some(result) = callback(ip_hdr, tcp_hdr, remaining)? {
@@ -190,7 +197,7 @@ pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddrV4, dst: &
         }
     }
 
-    Err("Reading from interface failed!".into())
+    bail!("Reading from interface failed!")
 }
 
 pub fn create_socket() -> Result<(TransportSender, TransportReceiver)> {

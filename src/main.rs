@@ -1,44 +1,26 @@
-extern crate clap;
-extern crate env_logger;
-extern crate pktparse;
-extern crate nom;
-extern crate pnet;
-#[macro_use] extern crate log;
-#[macro_use] extern crate error_chain;
-
 pub mod args;
+pub mod errors;
 pub mod net;
 
-mod errors {
-    use std;
-
-    error_chain! {
-        foreign_links {
-            Io(std::io::Error);
-            ParseInt(std::num::ParseIntError);
-            ParseAddress(std::net::AddrParseError);
-        }
-    }
-}
-pub use errors::{Error, ErrorKind, Result};
-
-use error_chain::ChainedError;
-use errors::ResultExt;
-
+use crate::args::Args;
+use crate::errors::*;
+use crate::net::TcpFlags;
+use env_logger::Env;
 use std::io::{self, Read};
 use std::thread;
-use args::Arguments;
-use net::TcpFlags;
+use structopt::StructOpt;
 
+fn main() -> Result<()> {
+    let arguments = Args::from_args();
 
-fn run() -> Result<()> {
-    let arguments = Arguments::parse().chain_err(|| "failed to parse arguments")?;
+    let log_level = if arguments.quiet == 0 {
+        "rshijack=debug"
+    } else {
+        ""
+    };
 
-    if arguments.quiet == 0 && std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "rshijack=debug");
-    }
-
-    env_logger::init();
+    env_logger::init_from_env(Env::default()
+        .default_filter_or(log_level));
 
     trace!("arguments: {:?}", arguments);
 
@@ -97,11 +79,4 @@ fn run() -> Result<()> {
     eprintln!("Exiting..");
 
     Ok(())
-}
-
-fn main() {
-    if let Err(ref e) = run() {
-        eprintln!("{}", e.display_chain());
-        std::process::exit(1);
-    }
 }
