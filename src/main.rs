@@ -1,44 +1,37 @@
-pub mod args;
-pub mod errors;
-pub mod net;
-
-use crate::args::Args;
-use crate::errors::*;
-use crate::net::TcpFlags;
 use env_logger::Env;
+use rshijack::args::Args;
+use rshijack::errors::*;
+use rshijack::net::{self, TcpFlags};
 use std::io::{self, Read};
 use std::thread;
 use structopt::StructOpt;
-use std::net::SocketAddrV4;
 
 fn main() -> Result<()> {
-    let arguments = Args::from_args();
+    let args = Args::from_args();
 
-    let log_level = if arguments.quiet == 0 {
+    let log_level = if args.quiet == 0 {
         "rshijack=debug"
     } else {
-        ""
+        "warn"
     };
 
-    env_logger::init_from_env(Env::default()
-        .default_filter_or(log_level));
+    env_logger::init_from_env(Env::default().default_filter_or(log_level));
 
-    trace!("arguments: {:?}", arguments);
+    trace!("arguments: {:?}", args);
 
     eprintln!("Waiting for SEQ/ACK to arrive from the srcip to the dstip.");
     eprintln!("(To speed things up, try making some traffic between the two, /msg person asdf)");
 
-    let mut connection = net::Connection::new(
-        SocketAddrV4::new(*arguments.src.ip(), arguments.src.port()),
-        SocketAddrV4::new(*arguments.dst.ip(), arguments.dst.port()),
-        arguments.seq,
-        arguments.ack,
+    let mut connection = net::Connection::new(args.src, args.dst, args.seq, args.ack);
+    eprintln!(
+        "[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}",
+        connection.get_seq(),
+        connection.get_ack()
     );
-    eprintln!("[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}", connection.get_seq(), connection.get_ack());
 
     let (mut tx, _rx) = net::create_socket()?;
 
-    if arguments.reset {
+    if args.reset {
         connection.reset(&mut tx)?;
         eprintln!("[+] Connection has been reset");
         return Ok(());
@@ -46,11 +39,11 @@ fn main() -> Result<()> {
 
     {
         let mut connection = connection.clone();
-        let interface = arguments.interface.clone();
+        let interface = args.interface.clone();
 
-        // arguments are flipped for receiving
-        let dst = connection.src.clone();
-        let src = connection.dst.clone();
+        // args are flipped for receiving
+        let dst = connection.src;
+        let src = connection.dst;
 
         let (mut tx, _rx) = net::create_socket()?;
 
@@ -59,7 +52,7 @@ fn main() -> Result<()> {
         });
     }
 
-    if arguments.send_null {
+    if args.send_null {
         info!("Sending 1kb of null bytes to prevent desync");
 
         let data = vec![0; 1024];

@@ -1,26 +1,24 @@
-use pnet::transport::{TransportSender, TransportReceiver, transport_channel};
-use pnet::transport::TransportChannelType::Layer3;
-use pnet::packet::tcp::MutableTcpPacket;
-use pnet::packet::ipv4::{MutableIpv4Packet, Ipv4Flags};
-use pnet::packet::ipv6::MutableIpv6Packet;
-use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::packet::MutablePacket;
-use pnet::datalink::{self, NetworkInterface};
+use crate::errors::*;
 use pnet::datalink::Channel::Ethernet;
+use pnet::datalink::{self, NetworkInterface};
+use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::ipv4::{Ipv4Flags, MutableIpv4Packet};
+use pnet::packet::ipv6::MutableIpv6Packet;
+use pnet::packet::tcp::MutableTcpPacket;
+use pnet::packet::MutablePacket;
+use pnet::transport::TransportChannelType::Layer3;
+use pnet::transport::{transport_channel, TransportReceiver, TransportSender};
 
-pub use pnet::packet::tcp::{TcpFlags, ipv4_checksum, ipv6_checksum};
+pub use pnet::packet::tcp::{ipv4_checksum, ipv6_checksum, TcpFlags};
 
 use log::Level;
 use pktparse::ethernet;
-use pktparse::{ip, ipv4, ipv6};
 use pktparse::tcp::{self, TcpHeader};
+use pktparse::{ip, ipv4, ipv6};
 
 use std::io::{self, Write};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::sync::{Arc, Mutex};
-use std::net::{IpAddr, SocketAddr, Ipv4Addr, SocketAddrV4, Ipv6Addr, SocketAddrV6};
-
-use crate::errors::*;
-
 
 #[derive(Debug, Clone)]
 pub struct Connection {
@@ -55,17 +53,25 @@ impl Connection {
 
     #[inline]
     pub fn get_seq(&self) -> u32 {
-        (*self.seq.lock().unwrap()).clone()
+        *self.seq.lock().unwrap()
     }
 
     #[inline]
     pub fn get_ack(&self) -> u32 {
-        (*self.ack.lock().unwrap()).clone()
+        *self.ack.lock().unwrap()
     }
 
     #[inline]
     pub fn sendtcp(&mut self, tx: &mut TransportSender, flags: u16, data: &[u8]) -> Result<()> {
-        sendtcp(tx, &self.src, &self.dst, flags, self.get_seq(), self.get_ack(), &data)?;
+        sendtcp(
+            tx,
+            &self.src,
+            &self.dst,
+            flags,
+            self.get_seq(),
+            self.get_ack(),
+            &data,
+        )?;
         self.bump_seq(data.len() as u32);
         Ok(())
     }
@@ -74,12 +80,28 @@ impl Connection {
     pub fn ack(&mut self, tx: &mut TransportSender, mut ack: u32, data: &[u8]) -> Result<()> {
         ack += data.len() as u32;
         self.set_ack(ack);
-        sendtcp(tx, &self.src, &self.dst, TcpFlags::ACK, self.get_seq(), ack, &[])
+        sendtcp(
+            tx,
+            &self.src,
+            &self.dst,
+            TcpFlags::ACK,
+            self.get_seq(),
+            ack,
+            &[],
+        )
     }
 
     #[inline]
     pub fn reset(&mut self, tx: &mut TransportSender) -> Result<()> {
-        sendtcp(tx, &self.src, &self.dst, TcpFlags::RST, self.get_seq(), 0, &[])
+        sendtcp(
+            tx,
+            &self.src,
+            &self.dst,
+            TcpFlags::RST,
+            self.get_seq(),
+            0,
+            &[],
+        )
     }
 }
 
@@ -133,8 +155,8 @@ pub fn recv(tx: &mut TransportSender, interface: &str, connection: &mut Connecti
             return Ok(None);
         }
 
-        stdout.write(remaining).unwrap();
-        stdout.flush().unwrap();
+        stdout.write_all(remaining)?;
+        stdout.flush()?;
 
         connection.ack(tx, tcp_hdr.sequence_no, remaining)?;
 
@@ -162,8 +184,7 @@ pub fn sniff<F, T>(interface: &str, log_level: Level, src: &SocketAddr, dst: &So
         where F: FnMut(IPHeader, TcpHeader, &[u8]) -> Result<Option<T>> {
     let interfaces = datalink::interfaces();
     let interface = interfaces.into_iter()
-                        .filter(|iface: &NetworkInterface| iface.name == interface)
-                        .next()
+                        .find(|iface: &NetworkInterface| iface.name == interface)
                         .context("Interface not found")?;
 
     let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
@@ -277,7 +298,7 @@ pub fn sendtcpv4(tx: &mut TransportSender, src: &SocketAddrV4, dst: &SocketAddrV
     ipv4.set_source(src.ip().to_owned());
     ipv4.set_version(4);
     ipv4.set_ttl(64);
-    ipv4.set_destination(dst.ip().clone());
+    ipv4.set_destination(*dst.ip());
     ipv4.set_flags(Ipv4Flags::DontFragment);
     ipv4.set_options(&[]);
 
