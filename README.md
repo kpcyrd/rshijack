@@ -39,7 +39,7 @@ about 10.2MB.
 
 ## Notable mentions
 
-- 2020, August: @ezequielpereira wrote an [excellent blog post](https://offensi.com/2020/08/18/how-to-contact-google-sre-dropping-a-shell-in-cloud-sql/) about a GCE container->host escape with rshijack and contributed a [patch](https://github.com/kpcyrd/rshijack/commit/e3c797db372030b3b18f85913be264cf8a361db3) that was merged.
+- 2020, August: [@ezequielpereira](https://github.com/ezequielpereira) wrote an [excellent blog post](https://offensi.com/2020/08/18/how-to-contact-google-sre-dropping-a-shell-in-cloud-sql/) about a GCE container->host escape with rshijack and contributed a [patch](https://github.com/kpcyrd/rshijack/commit/e3c797db372030b3b18f85913be264cf8a361db3) that was merged.
 
 ## License
 
