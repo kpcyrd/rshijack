@@ -13,6 +13,10 @@ pub struct Args {
     pub src: SocketAddr,
     /// The destination of the connection
     pub dst: SocketAddr,
+    /// Initial seq number
+    pub seq: u32,
+    /// Initial ack number
+    pub ack: u32,
     /// Reset the connection rather than hijacking it
     #[structopt(short="r", long)]
     pub reset: bool,
