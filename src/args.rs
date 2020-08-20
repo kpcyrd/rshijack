@@ -14,9 +14,11 @@ pub struct Args {
     /// Destination of the connection
     pub dst: SocketAddr,
     /// Initial seq number, if already known
-    pub seq: u32,
+    #[structopt(long)]
+    pub seq: Option<u32>,
     /// Initial ack number, if already known
-    pub ack: u32,
+    #[structopt(long)]
+    pub ack: Option<u32>,
     /// Reset the connection rather than hijacking it
     #[structopt(short = "r", long)]
     pub reset: bool,

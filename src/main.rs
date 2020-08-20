@@ -22,12 +22,18 @@ fn main() -> Result<()> {
     eprintln!("Waiting for SEQ/ACK to arrive from the srcip to the dstip.");
     eprintln!("(To speed things up, try making some traffic between the two, /msg person asdf)");
 
-    let mut connection = net::Connection::new(args.src, args.dst, args.seq, args.ack);
-    eprintln!(
-        "[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}",
-        connection.get_seq(),
-        connection.get_ack()
-    );
+    let mut connection = if let (Some(seq), Some(ack)) = (args.seq, args.ack) {
+        eprintln!("[+] Using SEQ = 0x{:x}, ACK = 0x{:x}", seq, ack);
+        net::Connection::new(args.src, args.dst, seq, ack)
+    } else {
+        let c = net::getseqack(&args.interface, &args.src, &args.dst)?;
+        eprintln!(
+            "[+] Got packet! SEQ = 0x{:x}, ACK = 0x{:x}",
+            c.get_seq(),
+            c.get_ack()
+        );
+        c
+    };
 
     let (mut tx, _rx) = net::create_socket()?;
 
