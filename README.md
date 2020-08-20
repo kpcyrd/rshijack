@@ -37,6 +37,10 @@ about 10.2MB.
 
     docker run -it --init --rm --net=host kpcyrd/rshijack eth0 172.16.13.20:37386 172.16.13.19:23
 
+## Notable mentions
+
+- 2020, August: @ezequielpereira wrote an [excellent blog post](https://offensi.com/2020/08/18/how-to-contact-google-sre-dropping-a-shell-in-cloud-sql/) about a GCE container->host escape with rshijack and contributed a [patch](https://github.com/kpcyrd/rshijack/commit/e3c797db372030b3b18f85913be264cf8a361db3) that was merged.
+
 ## License
 
 GPLv3+
