@@ -1,27 +1,29 @@
 use std::net::SocketAddr;
-use structopt::StructOpt;
 use structopt::clap::AppSettings;
+use structopt::StructOpt;
 
 /// tcp connection hijacker, rust rewrite of shijack
 #[derive(Debug, StructOpt)]
 #[structopt(global_settings = &[AppSettings::ColoredHelp], after_help=r#"The original shijack in C was written by spwny and released around 2001.
 shijack credited cyclozine for inspiration."#)]
 pub struct Args {
-    /// The interface you are going to hijack on
+    /// Interface we are going to hijack on
     pub interface: String,
-    /// The source of the connection
+    /// Source of the connection
     pub src: SocketAddr,
-    /// The destination of the connection
+    /// Destination of the connection
     pub dst: SocketAddr,
-    /// Initial seq number
-    pub seq: u32,
-    /// Initial ack number
-    pub ack: u32,
+    /// Initial seq number, if already known
+    #[structopt(long)]
+    pub seq: Option<u32>,
+    /// Initial ack number, if already known
+    #[structopt(long)]
+    pub ack: Option<u32>,
     /// Reset the connection rather than hijacking it
-    #[structopt(short="r", long)]
+    #[structopt(short = "r", long)]
     pub reset: bool,
-    /// Prevent a desync by sending 1kb of null bytes
-    #[structopt(short="0", long)]
+    /// Desync original connection by sending 1kb of null bytes
+    #[structopt(short = "0", long)]
     pub send_null: bool,
     /// Disable verbose output
     #[structopt(short, long, parse(from_occurrences))]
