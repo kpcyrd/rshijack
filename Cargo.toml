@@ -7,15 +7,15 @@ license = "GPL-3.0"
 repository = "https://github.com/kpcyrd/rshijack"
 categories = ["command-line-utilities"]
 readme = "README.md"
+edition = "2018"
 
 [badges]
 travis-ci = { repository = "kpcyrd/rshijack" }
 
 [dependencies]
-clap = "2"
-pnet = "0.21"
-env_logger = "0.5"
+structopt = "0.3.14"
+pnet = "0.26"
+env_logger = "0.7"
 log = "0.4"
-error-chain = "0.11"
-pktparse = "0.2"
-nom = "3"
+anyhow = "1.0"
+pktparse = "0.5"
