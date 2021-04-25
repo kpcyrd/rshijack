@@ -1,6 +1,6 @@
 [package]
 name = "rshijack"
-version = "0.3.0"
+version = "0.4.0"
 description = "tcp connection hijacker, rust rewrite of shijack"
 authors = ["kpcyrd <git@rxv.cc>"]
 license = "GPL-3.0"

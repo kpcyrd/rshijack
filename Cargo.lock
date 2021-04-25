@@ -354,7 +354,7 @@ checksum = "24d5f089152e60f62d28b835fbff2cd2e8dc0baf1ac13343bef92ab7eed84548"
 
 [[package]]
 name = "rshijack"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "env_logger",
