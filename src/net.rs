@@ -105,7 +105,7 @@ impl Connection {
     }
 }
 
-pub struct IPHeader {
+pub struct IpHeader {
     source_addr: IpAddr,
     dest_addr: IpAddr,
 }
@@ -205,7 +205,7 @@ pub fn sniff<F, T>(
     mut callback: F,
 ) -> Result<T>
 where
-    F: FnMut(IPHeader, TcpHeader, &[u8]) -> Result<Option<T>>,
+    F: FnMut(IpHeader, TcpHeader, &[u8]) -> Result<Option<T>>,
 {
     let interfaces = datalink::interfaces();
     let interface = interfaces
@@ -240,21 +240,18 @@ where
                             continue;
                         }
 
-                        match ip_hdr.protocol {
-                            ip::IPProtocol::TCP => {
-                                if let Ok((remaining, tcp_hdr)) = tcp::parse_tcp_header(remaining) {
-                                    log!(log_level, "tcp: {:?}", tcp_hdr);
+                        if ip_hdr.protocol == ip::IPProtocol::TCP {
+                            if let Ok((remaining, tcp_hdr)) = tcp::parse_tcp_header(remaining) {
+                                log!(log_level, "tcp: {:?}", tcp_hdr);
 
-                                    let ip_hdr = IPHeader {
-                                        source_addr: IpAddr::V4(ip_hdr.source_addr),
-                                        dest_addr: IpAddr::V4(ip_hdr.dest_addr),
-                                    };
-                                    if let Some(result) = callback(ip_hdr, tcp_hdr, remaining)? {
-                                        return Ok(result);
-                                    }
+                                let ip_hdr = IpHeader {
+                                    source_addr: IpAddr::V4(ip_hdr.source_addr),
+                                    dest_addr: IpAddr::V4(ip_hdr.dest_addr),
+                                };
+                                if let Some(result) = callback(ip_hdr, tcp_hdr, remaining)? {
+                                    return Ok(result);
                                 }
                             }
-                            _ => (),
                         }
                     }
                 }
@@ -269,21 +266,18 @@ where
                             continue;
                         }
 
-                        match ip_hdr.next_header {
-                            ip::IPProtocol::TCP => {
-                                if let Ok((remaining, tcp_hdr)) = tcp::parse_tcp_header(remaining) {
-                                    log!(log_level, "tcp: {:?}", tcp_hdr);
+                        if ip_hdr.next_header == ip::IPProtocol::TCP {
+                            if let Ok((remaining, tcp_hdr)) = tcp::parse_tcp_header(remaining) {
+                                log!(log_level, "tcp: {:?}", tcp_hdr);
 
-                                    let ip_hdr = IPHeader {
-                                        source_addr: IpAddr::V6(ip_hdr.source_addr),
-                                        dest_addr: IpAddr::V6(ip_hdr.dest_addr),
-                                    };
-                                    if let Some(result) = callback(ip_hdr, tcp_hdr, remaining)? {
-                                        return Ok(result);
-                                    }
+                                let ip_hdr = IpHeader {
+                                    source_addr: IpAddr::V6(ip_hdr.source_addr),
+                                    dest_addr: IpAddr::V6(ip_hdr.dest_addr),
+                                };
+                                if let Some(result) = callback(ip_hdr, tcp_hdr, remaining)? {
+                                    return Ok(result);
                                 }
                             }
-                            _ => (),
                         }
                     }
                 }
@@ -364,7 +358,7 @@ pub fn sendtcpv4(
         data,
     )?;
 
-    match tx.send_to(ipv4, IpAddr::V4(dst.ip().clone())) {
+    match tx.send_to(ipv4, IpAddr::V4(*dst.ip())) {
         Ok(bytes) => {
             if bytes != total_len {
                 bail!("short send count: {}", bytes)
@@ -398,7 +392,7 @@ pub fn sendtcpv6(
     ipv6.set_source(src.ip().to_owned());
     ipv6.set_version(6);
     ipv6.set_hop_limit(64);
-    ipv6.set_destination(dst.ip().clone());
+    ipv6.set_destination(*dst.ip());
 
     // populate tcp
     gentcp(
@@ -411,7 +405,7 @@ pub fn sendtcpv6(
         data,
     )?;
 
-    match tx.send_to(ipv6, IpAddr::V6(dst.ip().clone())) {
+    match tx.send_to(ipv6, IpAddr::V6(*dst.ip())) {
         Ok(bytes) => {
             if bytes != total_len {
                 bail!("short send count: {}", bytes)
