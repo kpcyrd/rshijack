@@ -1,7 +1,5 @@
-# rshijack [![Build Status][travis-img]][travis] [![Crates.io][crates-img]][crates]
+# rshijack [![Crates.io][crates-img]][crates]
 
-[travis-img]:   https://travis-ci.org/kpcyrd/rshijack.svg?branch=master
-[travis]:       https://travis-ci.org/kpcyrd/rshijack
 [crates-img]:   https://img.shields.io/crates/v/rshijack.svg
 [crates]:       https://crates.io/crates/rshijack
 
@@ -31,17 +29,24 @@ The other tools in that screenshot are [sniffglue] and [arpspoof].
 [sniffglue]: https://github.com/kpcyrd/sniffglue
 [arpspoof]: https://su2.info/doc/arpspoof.php
 
+# Installation
+
+<a href="https://repology.org/project/rshijack/versions"><img align="right" src="https://repology.org/badge/vertical-allrepos/rshijack.svg" alt="Packaging status"></a>
+
+## Arch Linux 
+
+    pacman -S rshijack
+
 ## Docker
 
-If needed, rshijack can be pulled as a docker image. The image is currently
-about 10.2MB.
+If needed, rshijack can be pulled as a docker image. The image is currently about 10.2MB.
 
     docker run -it --init --rm --net=host kpcyrd/rshijack eth0 172.16.13.20:37386 172.16.13.19:23
 
-## Notable mentions
+# Notable mentions
 
 - 2020, August: [@ezequielpereira](https://github.com/ezequielpereira) wrote an [excellent blog post](https://offensi.com/2020/08/18/how-to-contact-google-sre-dropping-a-shell-in-cloud-sql/) about a GCE container->host escape with rshijack and contributed a [patch](https://github.com/kpcyrd/rshijack/commit/e3c797db372030b3b18f85913be264cf8a361db3) that was merged.
 
-## License
+# License
 
 GPLv3+
