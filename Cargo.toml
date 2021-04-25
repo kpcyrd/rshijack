@@ -15,7 +15,7 @@ travis-ci = { repository = "kpcyrd/rshijack" }
 [dependencies]
 anyhow = "1.0.32"
 structopt = "0.3.16"
-pnet = "0.26"
-env_logger = "0.7"
+pnet = "0.27"
+env_logger = "0.8"
 log = "0.4"
 pktparse = "0.5"

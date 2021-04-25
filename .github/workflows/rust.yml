@@ -1,0 +1,85 @@
+name: Rust
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+
+  cross:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+        - name: x86_64-unknown-linux-gnu
+        - name: x86_64-unknown-linux-musl
+        - name: i686-unknown-linux-gnu
+          binutils: i686-linux-gnu
+        - name: armv7-unknown-linux-gnueabihf
+          binutils: arm-linux-gnueabihf
+        - name: aarch64-unknown-linux-gnu
+          binutils: aarch64-linux-gnu
+        - name: aarch64-unknown-linux-musl
+          binutils: aarch64-linux-gnu
+        - name: powerpc64le-unknown-linux-gnu
+          binutils: powerpc64le-linux-gnu
+        - name: mipsel-unknown-linux-gnu
+          binutils: mipsel-linux-gnu
+        - name: mips64el-unknown-linux-gnuabi64
+          binutils: mips64el-linux-gnuabi64
+        - name: s390x-unknown-linux-gnu
+          binutils: s390x-linux-gnu
+    steps:
+    - name: Install binutils
+      run: sudo apt-get install binutils-${{ matrix.arch.binutils }}
+      if: matrix.arch.binutils
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ matrix.arch.name }}
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: --target ${{ matrix.arch.name }} --release
+    - name: Stripping binary
+      run: /usr/${{ matrix.arch.binutils }}/bin/strip target/${{ matrix.arch.name }}/release/rshijack
+      if: ${{ contains(matrix.arch.name, 'linux') }}
+    - uses: actions/upload-artifact@v2
+      with:
+        name: rshijack-${{ matrix.arch.name }}
+        path: target/${{ matrix.arch.name }}/release/rshijack
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        components: clippy
+    - uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        args: --workspace --tests -- --deny warnings
