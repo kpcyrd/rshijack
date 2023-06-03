@@ -33,7 +33,7 @@ The other tools in that screenshot are [sniffglue] and [arpspoof].
 
 <a href="https://repology.org/project/rshijack/versions"><img align="right" src="https://repology.org/badge/vertical-allrepos/rshijack.svg" alt="Packaging status"></a>
 
-## Arch Linux 
+## Arch Linux
 
     pacman -S rshijack
 
