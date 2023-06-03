@@ -1,23 +1,21 @@
+use clap::Parser;
 use env_logger::Env;
 use rshijack::args::Args;
 use rshijack::errors::*;
 use rshijack::net::{self, TcpFlags};
 use std::io::{self, Read};
 use std::thread;
-use structopt::StructOpt;
 
 fn main() -> Result<()> {
-    let args = Args::from_args();
+    let args = Args::parse();
 
-    let log_level = if args.quiet == 0 {
-        "rshijack=debug"
-    } else {
-        "warn"
+    let log_level = match args.quiet {
+        0 => "rshijack=debug,info",
+        1 => "rshijack=info,warn",
+        _ => "warn",
     };
 
     env_logger::init_from_env(Env::default().default_filter_or(log_level));
-
-    trace!("arguments: {:?}", args);
 
     eprintln!("Waiting for SEQ/ACK to arrive from the srcip to the dstip.");
     eprintln!("(To speed things up, try making some traffic between the two, /msg person asdf)");
@@ -61,7 +59,7 @@ fn main() -> Result<()> {
     if args.send_null {
         info!("Sending 1kb of null bytes to prevent desync");
 
-        let data = vec![0; 1024];
+        let data = [0; 1024];
         connection.sendtcp(&mut tx, TcpFlags::ACK | TcpFlags::PSH, &data)?;
     }
 

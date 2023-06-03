@@ -70,7 +70,7 @@ impl Connection {
             flags,
             self.get_seq(),
             self.get_ack(),
-            &data,
+            data,
         )?;
         self.bump_seq(data.len() as u32);
         Ok(())
@@ -225,7 +225,7 @@ where
     while let Ok(packet) = rx.next() {
         trace!("received {:?}", packet);
 
-        if let Ok((remaining, eth_frame)) = ethernet::parse_ethernet_frame(&packet) {
+        if let Ok((remaining, eth_frame)) = ethernet::parse_ethernet_frame(packet) {
             log!(log_level, "eth: {:?}", eth_frame);
 
             match (eth_frame.ethertype, src, dst) {
