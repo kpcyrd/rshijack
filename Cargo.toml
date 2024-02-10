@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.32"
 clap = { version = "4.1.11", features = ["derive"] }
-env_logger = "0.10"
+env_logger = "0.11"
 log = "0.4"
 pktparse = "0.7"
-pnet = "0.33"
+pnet = "0.34"

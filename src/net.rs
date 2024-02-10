@@ -62,7 +62,7 @@ impl Connection {
     }
 
     #[inline]
-    pub fn sendtcp(&mut self, tx: &mut TransportSender, flags: u16, data: &[u8]) -> Result<()> {
+    pub fn sendtcp(&mut self, tx: &mut TransportSender, flags: u8, data: &[u8]) -> Result<()> {
         sendtcp(
             tx,
             &self.src,
@@ -299,7 +299,7 @@ pub fn sendtcp(
     tx: &mut TransportSender,
     src: &SocketAddr,
     dst: &SocketAddr,
-    flags: u16,
+    flags: u8,
     seq: u32,
     ack: u32,
     data: &[u8],
@@ -319,7 +319,7 @@ pub fn sendtcpv4(
     tx: &mut TransportSender,
     src: &SocketAddrV4,
     dst: &SocketAddrV4,
-    flags: u16,
+    flags: u8,
     seq: u32,
     ack: u32,
     data: &[u8],
@@ -374,7 +374,7 @@ pub fn sendtcpv6(
     tx: &mut TransportSender,
     src: &SocketAddrV6,
     dst: &SocketAddrV6,
-    flags: u16,
+    flags: u8,
     seq: u32,
     ack: u32,
     data: &[u8],
@@ -421,7 +421,7 @@ fn gentcp(
     payload_mut: &mut [u8],
     src: &SocketAddr,
     dst: &SocketAddr,
-    flags: u16,
+    flags: u8,
     seq: u32,
     ack: u32,
     data: &[u8],
