@@ -1,4 +1,4 @@
-FROM rust:alpine3.17
+FROM rust:alpine3.19
 ENV RUSTFLAGS="-C target-feature=-crt-static"
 RUN apk add musl-dev
 WORKDIR /app
@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/var/cache/buildkit \
     cp -v /var/cache/buildkit/target/release/rshijack .
 RUN strip rshijack
 
-FROM alpine:3.17
+FROM alpine:3.19
 RUN apk add --no-cache libgcc
 COPY --from=0 /app/rshijack /usr/local/bin/rshijack
 ENTRYPOINT ["rshijack"]

@@ -10,9 +10,9 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - name: Set up cargo cache
+    - name: 🏗️ Setup build cache
       uses: actions/cache@v3
       continue-on-error: false
       with:
@@ -25,14 +25,23 @@ jobs:
         key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: ${{ runner.os }}-cargo-release-
 
-    - name: Build
-      run: cargo build --release --verbose
+    - name: 🚚 Install dependencies (repro-env)
+      run: |
+        wget 'https://github.com/kpcyrd/repro-env/releases/download/v0.3.2/repro-env'
+        echo '660995089d32178a63763cf47e1b97e265ef5cf24bf646d16728ca51bf2fab50  repro-env' | sha256sum -c -
+        sudo install -m755 repro-env -t /usr/bin
 
-    - name: Upload binary
+    - name: 🛠️ Build
+      run: make
+
+    - name: Print sha256 of binary
+      run: sha256sum target/x86_64-unknown-linux-musl/release/rshijack
+
+    - name: 📦 Upload binary
       uses: actions/upload-artifact@v3
       with:
         name: bin
-        path: target/release/rshijack
+        path: target/x86_64-unknown-linux-musl/release/rshijack
 
   cross:
     runs-on: ubuntu-latest
@@ -50,12 +59,11 @@ jobs:
           binutils: aarch64-linux-gnu
         - name: aarch64-unknown-linux-musl
           binutils: aarch64-linux-gnu
+        - name: riscv64gc-unknown-linux-gnu
+          binutils: riscv64-linux-gnu
+          unstripped: true
         - name: powerpc64le-unknown-linux-gnu
           binutils: powerpc64le-linux-gnu
-        - name: mipsel-unknown-linux-gnu
-          binutils: mipsel-linux-gnu
-        - name: mips64el-unknown-linux-gnuabi64
-          binutils: mips64el-linux-gnuabi64
         - name: s390x-unknown-linux-gnu
           binutils: s390x-linux-gnu
     steps:
@@ -64,7 +72,21 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y binutils-${{ matrix.arch.binutils }}
       if: matrix.arch.binutils
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+
+    - name: 🏗️ Setup build cache
+      uses: actions/cache@v3
+      continue-on-error: false
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ matrix.arch.name }}-release-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-${{ matrix.arch.name }}-release-
+
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
@@ -77,7 +99,7 @@ jobs:
         args: --target ${{ matrix.arch.name }} --release
     - name: Stripping binary
       run: /usr/${{ matrix.arch.binutils }}/bin/strip target/${{ matrix.arch.name }}/release/rshijack
-      if: ${{ contains(matrix.arch.name, 'linux') }}
+      if: "${{ contains(matrix.arch.name, 'linux') && !matrix.arch.unstripped }}"
     - uses: actions/upload-artifact@v2
       with:
         name: rshijack-${{ matrix.arch.name }}
@@ -90,7 +112,7 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-22.04]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up cargo cache
       uses: actions/cache@v3
@@ -113,6 +135,6 @@ jobs:
   fmt:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Run cargo fmt
       run: cargo fmt --all -- --check
