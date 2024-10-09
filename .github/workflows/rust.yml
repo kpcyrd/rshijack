@@ -8,13 +8,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
 
     - name: 🏗️ Setup build cache
-      uses: actions/cache@v3
-      continue-on-error: false
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
@@ -38,7 +37,7 @@ jobs:
       run: sha256sum target/x86_64-unknown-linux-musl/release/rshijack
 
     - name: 📦 Upload binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: bin
         path: target/x86_64-unknown-linux-musl/release/rshijack
@@ -75,8 +74,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: 🏗️ Setup build cache
-      uses: actions/cache@v3
-      continue-on-error: false
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
@@ -100,7 +98,7 @@ jobs:
     - name: Stripping binary
       run: /usr/${{ matrix.arch.binutils }}/bin/strip target/${{ matrix.arch.name }}/release/rshijack
       if: "${{ contains(matrix.arch.name, 'linux') && !matrix.arch.unstripped }}"
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
         name: rshijack-${{ matrix.arch.name }}
         path: target/${{ matrix.arch.name }}/release/rshijack
@@ -110,13 +108,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-22.04]
+        os: [macos-latest, ubuntu-24.04]
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up cargo cache
-      uses: actions/cache@v3
-      continue-on-error: false
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/bin/
@@ -133,7 +130,7 @@ jobs:
       run: cargo test --verbose
 
   fmt:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
     - name: Run cargo fmt
