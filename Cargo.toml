@@ -15,4 +15,4 @@ clap = { version = "4.1.11", features = ["derive"] }
 env_logger = "0.11"
 log = "0.4"
 pktparse = "0.7"
-pnet = "0.34"
+pnet = "0.35"
